@@ -1,4 +1,5 @@
 
+'use strict';
 import services from './services';
 import workflows from './workflows';
 import { Reactory } from '@reactory/server-core/types/reactory';
