@@ -27,7 +27,7 @@ const getAuthenticatedClient = (accessToken: string, apiVersion = 'v1.0') => {
 
 
 const MSGraph: Reactory.MicrosoftGraph.Service.IMicrosoftGraph = {
-  async getProfileImage(accessToken, size = '120x120') {
+  async getProfileImage(accessToken: string, size: string = '120x120') {
     const client = getAuthenticatedClient(accessToken);
 
     try {
@@ -63,7 +63,7 @@ const MSGraph: Reactory.MicrosoftGraph.Service.IMicrosoftGraph = {
       return null;
     }
   },
-  async getUserDetails(accessToken, options = { profileImage: false, imageSize: '120x120' }) {
+  async getUserDetails(accessToken: string, options: any = { profileImage: false, imageSize: '120x120' }) {
 
     const client = getAuthenticatedClient(accessToken);
     let user = {
@@ -92,7 +92,7 @@ const MSGraph: Reactory.MicrosoftGraph.Service.IMicrosoftGraph = {
     return user;
   },
 
-  async getEvents(accessToken) {
+  async getEvents(accessToken: string) {
     const client = getAuthenticatedClient(accessToken);
 
     const events = await client
@@ -104,7 +104,7 @@ const MSGraph: Reactory.MicrosoftGraph.Service.IMicrosoftGraph = {
     return events;
   },
 
-  async getEmails(accessToken, filter) {
+  async getEmails(accessToken: string, filter: any) {
     logger.debug(`Getting emails via MS graph`, filter);
     const client = getAuthenticatedClient(accessToken);
     let emails = [];
@@ -134,8 +134,8 @@ const MSGraph: Reactory.MicrosoftGraph.Service.IMicrosoftGraph = {
     return emails;
   },
 
-  async getTasks(accesstoken, filter) {
-    const tasks = await getAuthenticatedClient(accesstoken, 'beta')
+  async getTasks(accessToken: string, filter: any) {
+    const tasks = await getAuthenticatedClient(accessToken, 'beta')
       .api('/me/outlook/tasks')
       .select('id,dueDateTime,assignedTo,subject,body')
       .get()
@@ -144,8 +144,8 @@ const MSGraph: Reactory.MicrosoftGraph.Service.IMicrosoftGraph = {
     return tasks;
   },
 
-  async getTask(accesstoken, id) {
-    const tasks = await getAuthenticatedClient(accesstoken, 'beta')
+  async getTask(accessToken: string, id: string) {
+    const tasks = await getAuthenticatedClient(accessToken, 'beta')
       .api(`/me/outlook/tasks/${id}`)
       .select('id,dueDateTime,assignedTo,subject,body')
       .get()
@@ -154,11 +154,11 @@ const MSGraph: Reactory.MicrosoftGraph.Service.IMicrosoftGraph = {
     return tasks;
   },
 
-  async deleteTask(accesstoken, id) {
+  async deleteTask(accessToken: string, id: string) {
 
     logger.debug(`MS DELETING TASK - ID:: ${id}`)
 
-    const tasks = await getAuthenticatedClient(accesstoken, 'beta')
+    const tasks = await getAuthenticatedClient(accessToken, 'beta')
       .api(`/me/outlook/tasks/${id}`)
       .delete()
       .then();
@@ -166,7 +166,7 @@ const MSGraph: Reactory.MicrosoftGraph.Service.IMicrosoftGraph = {
     return tasks;
   },
 
-  async createTask(accessToken, subject, assignedTo = null, startDate, dueDate, timeZone = 'South Africa Standard Time') {
+  async createTask(accessToken: string, subject: string, assignedTo = null, startDate: moment.Moment, dueDate: moment.Moment, timeZone = 'South Africa Standard Time') {
 
     startDate = moment(startDate);
     dueDate = moment(dueDate);
@@ -198,7 +198,7 @@ const MSGraph: Reactory.MicrosoftGraph.Service.IMicrosoftGraph = {
     contentType: Microsoft.BodyType = 'text',
     content: string,
     recipients: Microsoft.Recipient[],
-    saveToSentItems?: boolean = false,
+    saveToSentItems?: boolean,
     ccRecipients?: Microsoft.Recipient[],
     bccRecipients?: Microsoft.Recipient[],
     attachments?: Microsoft.Attachment[]) {
@@ -229,4 +229,3 @@ const MSGraph: Reactory.MicrosoftGraph.Service.IMicrosoftGraph = {
 };
 
 export default MSGraph;
-
