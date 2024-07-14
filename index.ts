@@ -2,10 +2,10 @@
 'use strict';
 import services from './services';
 import workflows from './workflows';
-import { Reactory } from '@reactory/server-core/types/reactory';
+import Reactory from '@reactory/reactory-core';
 
 
-const reactoryAzure: Reactory.IReactoryModule = {
+const reactoryAzure: Reactory.Server.IReactoryModule = {
   nameSpace: 'core',
   version: '1.0.0',
   name: 'ReactoryAzure',
@@ -15,9 +15,17 @@ const reactoryAzure: Reactory.IReactoryModule = {
     Resolvers: {},
     Types: [],
   },
+  models: [],
   workflows: [...workflows],
   forms: [],
   services: [...services],
+  translations: [],
+  clientPlugins: [],
+  cli: [],
+  description: 'Reactory Azure Module',
+  grpc: null,
+  passportProviders: [],
+  pdfs: [],
 };
 
 export default reactoryAzure;

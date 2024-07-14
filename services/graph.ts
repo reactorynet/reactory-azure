@@ -2,8 +2,7 @@
 import "isomorphic-fetch";
 import moment from 'moment';
 import { response } from "express";
-import { Client, ResponseType } from "@microsoft/microsoft-graph-client";
-import * as Microsoft from "@microsoft/microsoft-graph-types";
+import Azure from "@azure/msal-browser";
 import logger from '@reactory/server-core/logging';
 import ApiError from '@reactory/server-core/exceptions';
 import { Reactory } from "@reactory/server-modules/reactory-azure/types";
