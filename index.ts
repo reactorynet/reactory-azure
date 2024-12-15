@@ -6,6 +6,7 @@ import Reactory from '@reactory/reactory-core';
 
 
 const reactoryAzure: Reactory.Server.IReactoryModule = {
+  id: 'reactory-azure',
   nameSpace: 'core',
   version: '1.0.0',
   name: 'ReactoryAzure',
