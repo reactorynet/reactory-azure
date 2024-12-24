@@ -2,10 +2,8 @@
   "name": "@reactory/azure",
   "version": "1.1.0",
   "displayName": "Reactory Azure Module",
-  "description": "Reactory Azure Module - provides Azure specific services and components for the reactory eco-system.",
-  "main": "dist/reactory.azure.js",
+  "description": "Reactory Azure Module - provides Azure specific services and components for the reactory eco-system.",  
   "module": "@reactory/azure",
-  "typings": "dist/types/index.d.ts",
   "private": "true",
   "files": [
     "dist",
