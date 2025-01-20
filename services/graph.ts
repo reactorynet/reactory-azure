@@ -2,7 +2,6 @@
 import "isomorphic-fetch";
 import moment from 'moment';
 import { response } from "express";
-import Azure from "@azure/msal-browser";
 import logger from '@reactory/server-core/logging';
 import ApiError from '@reactory/server-core/exceptions';
 import { Reactory } from "@reactory/server-modules/reactory-azure/types";

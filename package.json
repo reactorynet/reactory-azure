@@ -10,14 +10,14 @@
     "docs",
     "branding"
   ],
-  "type": "module",
+  "type": "commonjs",
   "author": {
     "name": "Werner Weber",
     "email": "werner.webere@reactory.net"
   },
   "licenses": [
     {
-      "license": "Apache-2.0"
+      "license": "MIT"
     }
   ],
   "moduleNameMapper": {
