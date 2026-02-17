@@ -2,7 +2,7 @@
 'use strict';
 import services from './services';
 import workflows from './workflows';
-import Reactory from '@reactory/reactory-core';
+import Reactory from '@reactorynet/reactory-core';
 
 
 const reactoryAzure: Reactory.Server.IReactoryModule = {
