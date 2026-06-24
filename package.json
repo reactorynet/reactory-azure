@@ -2,9 +2,8 @@
   "name": "@reactory/azure",
   "version": "1.1.0",
   "displayName": "Reactory Azure Module",
-  "description": "Reactory Azure Module - provides Azure specific services and components for the reactory eco-system.",  
+  "description": "Reactory Azure Module - provides Azure specific services and components for the reactory eco-system.",
   "module": "@reactory/azure",
-  "private": "true",
   "files": [
     "dist",
     "docs",
@@ -27,9 +26,9 @@
     "type": "git",
     "url": "https://github.com/reactorynet/reactory-azure.git"
   },
-  "dependencies": {   
+  "dependencies": {
+    "@azure/msal-browser": "3.19.0",
     "@azure/storage-blob": "12.23.0",
-    "@azure/storage-file-share": "12.23.0",
-    "@azure/msal-browser": "3.19.0"
+    "@azure/storage-file-share": "12.23.0"
   }
 }
