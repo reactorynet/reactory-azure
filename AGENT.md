@@ -288,6 +288,50 @@ Install it in one of the two locations that resolve from the module:
 A worktree install (`src/modules/reactory-worktrees/<id>/node_modules`) satisfies the test
 harness but is **not** visible from the natural mount, so it does not satisfy the server.
 
+## AI macros and the Azure Workspace Assistant (AZ-13)
+
+`ai/macros/index.ts` (owned by AZ-01) assembles `AZURE_MACROS` from one array per
+`ai/macros/<domain>.macros.ts` file. AZ-13 fills seven of those files; AZ-14 fills
+`teams.macros.ts`. **No domain ticket edits the barrel** - spreading the array is what
+makes the macro appear.
+
+| Macro | File | Service resolved via `context.getService` |
+|---|---|---|
+| `azure_connection_status` | `status.macros.ts` | `azure.AzureService@1.0.0` (facade; reads the token record, no Graph call) |
+| `azure_send_email` | `mail.macros.ts` | `azure.AzureMailService@1.0.0` |
+| `azure_search_email` | `mail.macros.ts` | `azure.AzureMailService@1.0.0` |
+| `azure_create_event` | `calendar.macros.ts` | `azure.AzureCalendarService@1.0.0` |
+| `azure_list_events` | `calendar.macros.ts` | `azure.AzureCalendarService@1.0.0` |
+| `azure_search_drive` | `drive.macros.ts` | `azure.AzureDriveService@1.0.0` |
+| `azure_read_workbook` | `workbook.macros.ts` | `azure.AzureWorkbookService@1.0.0` |
+| `azure_list_contacts` | `contacts.macros.ts` | `azure.AzureContactsService@1.0.0` |
+| `azure_create_task` | `tasks.macros.ts` | `azure.AzureTodoService@1.0.0` |
+
+`azure_send_teams_message` is AZ-14's, in `teams.macros.ts`.
+
+**Contract.** Each entry is a `MacroComponentDefinition` whose single `tools` entry is the
+`MacroToolDefinition` the model calls. Every parameter carries a `description` and a
+`required` flag; the flag is compiled into `parameters.required` by
+`ai/macros/macro-support.ts` (which is not a `*.macros.ts` file, so the barrel and the
+contract test are untouched by it). Every macro returns a plain object - never a stream or
+a service instance.
+
+**No connection, no exception.** A service with no vaulted Microsoft token throws
+`ApiError { code: 'NotConnected' }`. Every macro catches that and returns
+`{ success: false, connected: false, status: 'DISCONNECTED', instructions }`, so the
+assistant can tell the user to connect instead of failing the chat turn. A missing
+service registration returns the same shape. No macro is allowed to throw.
+
+**Persona.** `ai/persona/AzureWorkspaceAssistant/agent.yaml` (id
+`AzureWorkspaceAssistant`, name "Azure Workspace Assistant", namespace `azure`) lists
+exactly the nine macro names in `tools.includes` and `macros.includes` - a persona is
+offered only tools this module registers.
+
+**Test rule.** `__tests__/macros.test.ts` asserts each of the nine names is *present* in
+`AZURE_MACROS` (a subset assertion) and never asserts a whole-array length: AZ-14 adds its
+teams macro to the same array independently, so a length is only correct on one merge
+order. The only place a ten-entry count belongs is the plan's definition of done.
+
 ## Tests
 
 Run from the module worktree. This repository has **no jest config of its own** — the host
@@ -335,6 +379,7 @@ interface emits `Object`, and no decorator here reads `design:paramtypes`.
 | `__tests__/graph-shim.test.ts` | the shim's success shapes: `getUserDetails` raw `/me` + `avatar` only when `profileImage`, `getProfileImage`, `getEmails` search, `sendEmail` body, and the three beta task methods |
 | `__tests__/routes-auth.test.ts` | `/azure/auth/url|callback|status|disconnect`: success, 401/503/500, redirect defaults, missing params |
 | `__tests__/drive-service.test.ts` (84) | `downloadItem` two-hop redirect with no `Authorization` on the storage host, 404 `itemNotFound` → `ApiError`, copy monitor (completed/inProgress/302/failure/drain), upload-session 202 and unreadable-body fallbacks, every `toNodeStream` body shape, error-body parsing and its 1 MiB cap, item scrubbing (including a null thumbnail set), `/azure/files` proxy headers, 401/404/500/502/503, stream error before/after headers, client disconnect, all resolver mutations and identity unwrapping |
+| `__tests__/macros.test.ts` (107) | the nine AZ-13 macros are present in `AZURE_MACROS` (subset assertions, no array length), no other macro file declares the Teams macro, every parameter has a description and its required flag lands in `schema.required`, each macro resolves its service from a fake context and imports no service singleton, a `NotConnected` rejection becomes a `connected: false` payload instead of a throw, and `AzureWorkspaceAssistant/agent.yaml` parses with a tool list that is a subset of the registered macro names |
 | `__tests__/drive.request-shape.test.ts` (40) | segment/query encoding (`a b#c?.txt`, search quoting), item/parent/drive paths, write bodies, simple upload at 4 MiB, resumable fragments at 320 KiB multiples with no bearer token, 416 resume, thumbnail path, and the **production `fetch` transport** (`redirect: 'manual'`, header normalisation, typed no-fetch failure) |
 
 All tests mock the Graph layer: **no live Graph call is made** in this repository. The drive
