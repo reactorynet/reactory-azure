@@ -1,8 +1,263 @@
-# Teams GraphQL surface - STUB created by AZ-01.
+# Microsoft Teams GraphQL surface (AZ-14).
 #
-# TODO(AZ-14): AZ-14 replaces the placeholder field below with the real
-# queries and mutations. The file exists so AZ-14 never has to edit
-# graphql/types/index.ts, which is loaded eagerly and owned by AZ-01.
+# Everything here is served over Microsoft Graph **v1.0** paths:
+#   /me/chats
+#   /chats/{chatId}/messages
+#   /me/joinedTeams
+#   /teams/{teamId}/channels
+#   /teams/{teamId}/channels/{channelId}/messages
+#   POST /communications/getPresencesByUserId
+#
+# ---------------------------------------------------------------------------
+# IDS ARE OPAQUE - THE SERVICE ENCODES THEM, YOU DO NOT
+# ---------------------------------------------------------------------------
+# Teams ids are opaque `19:...@thread.tacv2` strings. Chat, channel and message ids
+# can carry `=` padding (for example `19:abc=@thread.tacv2`) and contain `:`, `@` and
+# `.`. The service percent-encodes every id in full before building a path
+# (`%3D`, `%3A`, `%40`), so a client passes the id exactly as Graph returned it and
+# never pre-encodes, splits or parses it.
+#
+# ---------------------------------------------------------------------------
+# PRESENCE IS NEAR-REAL-TIME
+# ---------------------------------------------------------------------------
+# `azurePresence` is a snapshot, not a resource. It is read from Graph on every call
+# and is never served from the Redis cache: a cached `Available` outlives its truth.
+#
+# ---------------------------------------------------------------------------
+# A 403 IS AN ERROR, NOT AN EMPTY LIST
+# ---------------------------------------------------------------------------
+# Reading a channel the caller cannot see raises a GraphQL error carrying Graph's code
+# (`Forbidden` / `accessDenied`). It never resolves to `[]`, because an empty message
+# list must keep meaning "there are no messages".
+# ---------------------------------------------------------------------------
+
+"""How a Teams message body is rendered. The only two values Graph accepts."""
+enum AzureTeamsMessageContentType {
+  html
+  text
+}
+
+"""A Graph `identitySet` member - who sent a message or reacted to it."""
+type AzureTeamsIdentityUser {
+  id: String
+  displayName: String
+  """`aadUser`, `onPremiseAadUser`, `guestUser`, ..."""
+  userIdentityType: String
+}
+
+type AzureTeamsIdentityApplication {
+  id: String
+  displayName: String
+}
+
+"""A Graph `identitySet`: exactly one member is populated on a real message."""
+type AzureTeamsIdentity {
+  id: String
+  displayName: String
+  user: AzureTeamsIdentityUser
+  application: AzureTeamsIdentityApplication
+}
+
+"""A message body: `content` plus how it is rendered."""
+type AzureTeamsMessageBody {
+  content: String
+  contentType: AzureTeamsMessageContentType
+}
+
+"""A file or card attachment on a message."""
+type AzureTeamsAttachment {
+  id: String
+  contentType: String
+  contentUrl: String
+  name: String
+  thumbnailUrl: String
+}
+
+"""A mention on a message."""
+type AzureTeamsMention {
+  id: Int
+  mentionText: String
+  mentioned: AzureTeamsIdentity
+}
+
+"""A reaction on a message."""
+type AzureTeamsReaction {
+  reactionType: String
+  createdDateTime: String
+  user: AzureTeamsIdentity
+}
+
+"""The team and channel a message belongs to (`chatMessage.channelIdentity`)."""
+type AzureTeamsChannelIdentity {
+  teamId: String
+  channelId: String
+}
+
+"""
+A Teams message - `chatMessage` for both a chat and a channel.
+
+A chat message carries `chatId`; a channel message carries `channelIdentity`.
+"""
+type AzureTeamsMessage {
+  id: String!
+  replyToId: String
+  messageType: String
+  subject: String
+  summary: String
+  importance: String
+  locale: String
+  webUrl: String
+  createdDateTime: String
+  lastModifiedDateTime: String
+  deletedDateTime: String
+  from: AzureTeamsIdentity
+  body: AzureTeamsMessageBody
+  """Present on `/chats/{chatId}/messages` results."""
+  chatId: String
+  """Present on `/teams/{teamId}/channels/{channelId}/messages` results."""
+  channelIdentity: AzureTeamsChannelIdentity
+  attachments: [AzureTeamsAttachment!]
+  mentions: [AzureTeamsMention!]
+  reactions: [AzureTeamsReaction!]
+}
+
+"""A chat participant (`chat.members[]`)."""
+type AzureTeamsChatMember {
+  id: String
+  roles: [String!]
+  displayName: String
+  userId: String
+  email: String
+  tenantId: String
+}
+
+"""A compact preview of the newest message in a chat."""
+type AzureTeamsChatMessagePreview {
+  id: String
+  createdDateTime: String
+  isDeleted: Boolean
+  messageType: String
+  body: AzureTeamsMessageBody
+  from: AzureTeamsIdentity
+}
+
+"""A chat (`/me/chats`, `/chats/{chatId}`)."""
+type AzureTeamsChat {
+  id: String!
+  topic: String
+  """`oneOnOne`, `group` or `meeting`."""
+  chatType: String
+  createdDateTime: String
+  lastUpdatedDateTime: String
+  webUrl: String
+  tenantId: String
+  """Populated only when the query expanded `members`."""
+  members: [AzureTeamsChatMember!]
+  lastMessagePreview: AzureTeamsChatMessagePreview
+}
+
+"""A team the signed-in user has joined (`/me/joinedTeams`)."""
+type AzureTeamsTeam {
+  id: String!
+  displayName: String
+  description: String
+  isArchived: Boolean
+  """`private`, `public` or `hiddenMembership`."""
+  visibility: String
+  webUrl: String
+  tenantId: String
+}
+
+"""A channel in a team (`/teams/{teamId}/channels`)."""
+type AzureTeamsChannel {
+  id: String!
+  displayName: String
+  description: String
+  """`standard`, `private` or `shared`."""
+  membershipType: String
+  webUrl: String
+  email: String
+  createdDateTime: String
+}
+
+"""A user's presence snapshot (`/communications/getPresencesByUserId`)."""
+type AzureTeamsPresenceOutOfOfficeSettings {
+  isOutOfOffice: Boolean
+  message: String
+}
+
+type AzureTeamsPresenceStatusMessageContent {
+  content: String
+  contentType: String
+}
+
+type AzureTeamsPresenceStatusMessage {
+  message: AzureTeamsPresenceStatusMessageContent
+  expiryDateTime: String
+}
+
+type AzureTeamsWorkLocation {
+  displayName: String
+}
+
+type AzureTeamsPresence {
+  """The Microsoft Graph user id the presence belongs to."""
+  id: String!
+  """`Available`, `Busy`, `Away`, `Offline`, ..."""
+  availability: String
+  """`Available`, `InACall`, `InAMeeting`, `Away`, `OffWork`, ..."""
+  activity: String
+  outOfOfficeSettings: AzureTeamsPresenceOutOfOfficeSettings
+  statusMessage: AzureTeamsPresenceStatusMessage
+  workLocation: AzureTeamsWorkLocation
+}
+
+"""The payload for a new chat or channel message."""
+input AzureTeamsMessageInput {
+  """Message content. HTML when `contentType` is `html`, plain text otherwise."""
+  content: String!
+  """`html` or `text`. Omitted means `text`."""
+  contentType: AzureTeamsMessageContentType
+}
+
 extend type Query {
-  _azureTeamsPlaceholder: Boolean
+  """The signed-in user's chats (`/me/chats`)."""
+  azureChats(top: Int, skip: Int, filter: String, select: [String!], expand: [String!]): [AzureTeamsChat!]!
+  """Messages in one chat (`/chats/{chatId}/messages`), newest first."""
+  azureChatMessages(chatId: String!, top: Int, skip: Int, filter: String, select: [String!]): [AzureTeamsMessage!]!
+  """Teams the signed-in user has joined (`/me/joinedTeams`)."""
+  azureTeams(top: Int, skip: Int, filter: String, select: [String!]): [AzureTeamsTeam!]!
+  """Channels in one team (`/teams/{teamId}/channels`)."""
+  azureChannels(teamId: String!, top: Int, skip: Int, filter: String, select: [String!]): [AzureTeamsChannel!]!
+  """
+  Messages in one channel (`/teams/{teamId}/channels/{channelId}/messages`).
+
+  A 403 on a channel the caller cannot read is returned as an error with Graph's
+  code; it never becomes an empty list.
+  """
+  azureChannelMessages(
+    teamId: String!
+    channelId: String!
+    top: Int
+    skip: Int
+    filter: String
+    select: [String!]
+  ): [AzureTeamsMessage!]!
+  """
+  Presence for one or more users (`POST /communications/getPresencesByUserId`).
+
+  Near-real-time: read from Graph on every call, never from the Redis cache.
+  """
+  azurePresence(userIds: [String!]!): [AzureTeamsPresence!]!
+}
+
+extend type Mutation {
+  """Send a chat message (`POST /chats/{chatId}/messages`)."""
+  azureSendChatMessage(chatId: String!, input: AzureTeamsMessageInput!): AzureTeamsMessage
+  """Send a channel message (`POST /teams/{teamId}/channels/{channelId}/messages`)."""
+  azureSendChannelMessage(
+    teamId: String!
+    channelId: String!
+    input: AzureTeamsMessageInput!
+  ): AzureTeamsMessage
 }
