@@ -45,7 +45,7 @@ not fix it: it may not modify the host `package.json` and may not restart the se
 | 3 | `azure.AzureGraphClientProvider@1.0.0` | AZ-01 | implemented — the only Graph `Client` factory: retry, pagination, delta, batch |
 | 4 | `azure.AzureService@1.0.0` | AZ-01 | implemented — facade exposing every other service plus connection status/disconnect |
 | 5 | `azure.AzureMailService@1.0.0` | AZ-04 | stub — mail read, folders, categories, `$search` |
-| 6 | `azure.AzureTodoService@1.0.0` | AZ-06 | stub — Microsoft To Do lists, tasks, checklist items |
+| 6 | `azure.AzureTodoService@1.0.0` | AZ-06 | implemented — Microsoft To Do lists, tasks, checklist items over v1.0 `/me/todo`; no `assignedTo` (assignment is Planner) |
 | 7 | `azure.AzureCalendarService@1.0.0` | AZ-07 | stub — calendars, `calendarView`, event CRUD, availability |
 | 8 | `azure.AzureDriveService@1.0.0` | AZ-08 | stub — drives, children, download/upload, sharing |
 | 9 | `azure.AzureDocumentService@1.0.0` | AZ-09 | stub — templates, text extraction, PDF conversion (2 MB cap) |
@@ -77,7 +77,7 @@ may edit that barrel.
 | Identity / profile | `/me`, `/me/photos/{size}/$value` | AZ-01 | implemented |
 | Mail read | `/me/messages`, `/me/mailFolders`, `/me/outlook/masterCategories` | AZ-04 | stub |
 | Mail write | `/me/sendMail`, `/messages/{id}/reply`, drafts, attachments | AZ-05 | not started |
-| Tasks | `/me/todo/lists`, `/me/todo/lists/{id}/tasks`, `…/checklistItems` | AZ-06 | stub |
+| Tasks | `/me/todo/lists`, `/me/todo/lists/{id}/tasks`, `…/checklistItems` | AZ-06 | implemented |
 | Calendar | `/me/calendars`, `/me/calendarView`, `/me/calendar/getSchedule`, `/me/findMeetingTimes` | AZ-07 | stub |
 | Files | `/me/drive`, `/items/{id}/children`, `/content`, upload sessions, permissions | AZ-08 | stub |
 | Documents | `/items/{id}/content?format=pdf`, template copy | AZ-09 | stub |
@@ -90,6 +90,28 @@ may edit that barrel.
 
 `beta` appears in exactly one place: the legacy shim's `/me/outlook/tasks` block, which
 documents why AZ-06 replaces it. Everything new uses `v1.0`.
+
+### Microsoft To Do (AZ-06)
+
+`AzureTodoService` addresses only `/me/todo/...` on **v1.0**. The legacy shim's
+`/me/outlook/tasks` calls are untouched (AZ-19 retires them), and nothing in the new
+surface can reach that path - it stopped returning data on 20 August 2022.
+
+- **No task assignment.** A Microsoft To Do task has no assignee: To Do shares whole
+  *lists*. Per-task assignment is a **Planner** concept, expressed as `/planner/tasks`
+  with an `assignments` collection. No service method, input type or GraphQL field
+  exposes `assignedTo`, and a payload that carries `assignedTo`, `assignee` or
+  `assignments` is **rejected** with `UnsupportedTodoTaskAssignment` rather than
+  silently dropped - a caller must never believe a task was handed to someone.
+- **Task filtering is client-side.** `GET /me/todo/lists/{id}/tasks` documents only
+  that it *"supports some of the OData query parameters"* and names no filterable
+  property, so `dueDateTime` cannot be relied on server-side. `listTasks` reads every
+  page (to the provider's page bound) and applies `status`, `importance`,
+  `includeCompleted`, `dueAfter`, `dueBefore`, `skip` and `top` itself.
+- **Checklist items** are full CRUD under `…/tasks/{taskId}/checklistItems`.
+- Suites: `__tests__/todo.request-shape.test.ts` (all five list operations, all task
+  operations and all five checklist operations) and `__tests__/todo-service.test.ts`
+  (client-side selection, pagination, error contract, schema/resolver alignment).
 
 ## GraphQL surface (AZ-01)
 

@@ -1,8 +1,286 @@
-# Tasks GraphQL surface - STUB created by AZ-01.
+# Microsoft To Do GraphQL surface (AZ-06).
 #
-# TODO(AZ-06): AZ-06 replaces the placeholder field below with the real
-# queries and mutations. The file exists so AZ-06 never has to edit
-# graphql/types/index.ts, which is loaded eagerly and owned by AZ-01.
+# Everything here is served over Microsoft Graph **v1.0** paths:
+#   /me/todo/lists
+#   /me/todo/lists/{listId}/tasks
+#   /me/todo/lists/{listId}/tasks/{taskId}/checklistItems
+#
+# The legacy `/me/outlook/tasks` preview endpoint is gone: Microsoft states it
+# stopped returning data on 20 August 2022. No field in this file can reach it.
+#
+# ---------------------------------------------------------------------------
+# THERE IS NO assignedTo - AND THERE NEVER WILL BE
+# ---------------------------------------------------------------------------
+# A Microsoft To Do task has **no assignee**. To Do shares whole *lists*; it does
+# not assign individual tasks. Per-task assignment is a **Planner** concept and
+# is expressed through `/planner/tasks` with an `assignments` collection. None of
+# the input types below exposes `assignedTo`, `assignee` or `assignments`, and
+# the service rejects such a field rather than silently dropping it.
+# ---------------------------------------------------------------------------
+
+"""The five lifecycle values Microsoft To Do accepts for a task."""
+enum AzureTodoTaskStatus {
+  notStarted
+  inProgress
+  completed
+  waitingOnOthers
+  deferred
+}
+
+"""Task importance."""
+enum AzureTodoTaskImportance {
+  low
+  normal
+  high
+}
+
+"""A Graph `dateTimeTimeZone`: wall-clock dateTime plus the zone it belongs to."""
+type AzureDateTimeTimeZone {
+  """ISO 8601 wall-clock value with no offset, e.g. 2026-11-09T17:30:00.0000000."""
+  dateTime: String!
+  """Windows time zone name, e.g. South Africa Standard Time."""
+  timeZone: String!
+}
+
+"""A task body. `contentType` is `text` (default) or `html`."""
+type AzureTodoItemBody {
+  content: String!
+  contentType: String
+}
+
+type AzureTodoRecurrencePattern {
+  type: String!
+  interval: Int!
+  month: Int
+  dayOfMonth: Int
+  daysOfWeek: [String!]
+  firstDayOfWeek: String
+  index: String
+}
+
+type AzureTodoRecurrenceRange {
+  type: String!
+  startDate: String!
+  endDate: String
+  numberOfOccurrences: Int
+  recurrenceTimeZone: String
+}
+
+"""A `patternedRecurrence` on a recurring task."""
+type AzureTodoRecurrence {
+  pattern: AzureTodoRecurrencePattern
+  range: AzureTodoRecurrenceRange
+}
+
+"""One checklist item on a task (`.../checklistItems/{id}`)."""
+type AzureTodoChecklistItem {
+  id: String!
+  displayName: String
+  isChecked: Boolean
+  createdDateTime: String
+  lastModifiedDateTime: String
+}
+
+"""A resource linked to a task (a URL plus optional app metadata)."""
+type AzureTodoLinkedResource {
+  id: String
+  webUrl: String
+  applicationName: String
+  displayName: String
+  externalId: String
+}
+
+"""A Microsoft To Do task list (`/me/todo/lists/{id}`)."""
+type AzureTodoTaskList {
+  id: String!
+  displayName: String
+  """`none`, `defaultList` or `flaggedEmails`."""
+  wellknownListName: String
+  isOwner: Boolean
+  isShared: Boolean
+}
+
+"""
+A Microsoft To Do task (`/me/todo/lists/{listId}/tasks/{taskId}`).
+
+This is the real To Do shape. It has **no assignee field**: Microsoft To Do
+assigns nothing at task level - it shares whole lists. Task assignment is a
+Planner concern, served by `/planner/tasks` with `assignments`.
+"""
+type AzureTodoTask {
+  id: String!
+  title: String
+  body: AzureTodoItemBody
+  importance: AzureTodoTaskImportance
+  status: AzureTodoTaskStatus
+  dueDateTime: AzureDateTimeTimeZone
+  startDateTime: AzureDateTimeTimeZone
+  reminderDateTime: AzureDateTimeTimeZone
+  isReminderOn: Boolean
+  recurrence: AzureTodoRecurrence
+  categories: [String!]
+  checklistItems: [AzureTodoChecklistItem!]
+  linkedResources: [AzureTodoLinkedResource!]
+  completedDateTime: AzureDateTimeTimeZone
+  createdDateTime: String
+  lastModifiedDateTime: String
+  bodyLastModifiedDateTime: String
+  hasAttachments: Boolean
+}
+
+input AzureDateTimeTimeZoneInput {
+  dateTime: String!
+  timeZone: String!
+}
+
+input AzureTodoItemBodyInput {
+  content: String!
+  contentType: String
+}
+
+input AzureTodoRecurrencePatternInput {
+  type: String!
+  interval: Int!
+  month: Int
+  dayOfMonth: Int
+  daysOfWeek: [String!]
+  firstDayOfWeek: String
+  index: String
+}
+
+input AzureTodoRecurrenceRangeInput {
+  type: String!
+  startDate: String!
+  endDate: String
+  numberOfOccurrences: Int
+  recurrenceTimeZone: String
+}
+
+input AzureTodoRecurrenceInput {
+  pattern: AzureTodoRecurrencePatternInput!
+  range: AzureTodoRecurrenceRangeInput!
+}
+
+input AzureTodoChecklistItemInput {
+  displayName: String!
+  isChecked: Boolean
+}
+
+input AzureTodoLinkedResourceInput {
+  webUrl: String
+  applicationName: String
+  displayName: String
+  externalId: String
+}
+
+input AzureTodoTaskListInput {
+  displayName: String!
+}
+
+"""
+Fields for a new task.
+
+There is deliberately no `assignedTo`: a Microsoft To Do task has no assignee.
+Assignment is a Planner concept (`/planner/tasks` with `assignments`), and the
+service rejects an assignee field instead of ignoring it.
+"""
+input AzureTodoTaskCreateInput {
+  title: String!
+  body: AzureTodoItemBodyInput
+  importance: AzureTodoTaskImportance
+  status: AzureTodoTaskStatus
+  dueDateTime: AzureDateTimeTimeZoneInput
+  startDateTime: AzureDateTimeTimeZoneInput
+  reminderDateTime: AzureDateTimeTimeZoneInput
+  isReminderOn: Boolean
+  recurrence: AzureTodoRecurrenceInput
+  categories: [String!]
+  checklistItems: [AzureTodoChecklistItemInput!]
+  linkedResources: [AzureTodoLinkedResourceInput!]
+}
+
+"""
+Fields a task PATCH may change. Only supplied fields are sent, and `recurrence`
+and `checklistItems` are forwarded to Graph unchanged.
+
+There is deliberately no `assignedTo` - see `AzureTodoTaskCreateInput`.
+"""
+input AzureTodoTaskUpdateInput {
+  title: String
+  body: AzureTodoItemBodyInput
+  importance: AzureTodoTaskImportance
+  status: AzureTodoTaskStatus
+  dueDateTime: AzureDateTimeTimeZoneInput
+  startDateTime: AzureDateTimeTimeZoneInput
+  reminderDateTime: AzureDateTimeTimeZoneInput
+  isReminderOn: Boolean
+  recurrence: AzureTodoRecurrenceInput
+  categories: [String!]
+  checklistItems: [AzureTodoChecklistItemInput!]
+  linkedResources: [AzureTodoLinkedResourceInput!]
+}
+
+input AzureTodoChecklistItemUpdateInput {
+  displayName: String
+  isChecked: Boolean
+}
+
+"""
+Client-side task selection.
+
+`$filter` over `/me/todo/lists/{id}/tasks` is documented only as "some of the
+OData query parameters", with no list of filterable properties - and
+`dueDateTime` is not documented as filterable. These filters are therefore
+applied by the service after it has read the list, so `dueBefore`/`dueAfter`
+behave predictably instead of relying on an undocumented server-side filter.
+"""
+input AzureTodoTaskFilterInput {
+  status: AzureTodoTaskStatus
+  importance: AzureTodoTaskImportance
+  """Keep tasks due at or before this ISO 8601 instant."""
+  dueBefore: String
+  """Keep tasks due at or after this ISO 8601 instant."""
+  dueAfter: String
+  """Set false to drop completed tasks. Omitted means every task is returned."""
+  includeCompleted: Boolean
+  """Page size, applied after filtering."""
+  top: Int
+  """Offset, applied after filtering."""
+  skip: Int
+}
+
 extend type Query {
-  _azureTasksPlaceholder: Boolean
+  """Every Microsoft To Do list for the signed-in user."""
+  azureTodoLists: [AzureTodoTaskList!]!
+  """Tasks in one list; filtering is applied client-side (see AzureTodoTaskFilterInput)."""
+  azureTodoTasks(listId: String!, filter: AzureTodoTaskFilterInput): [AzureTodoTask!]!
+  """One task in one list."""
+  azureTodoTask(listId: String!, taskId: String!): AzureTodoTask
+  """Checklist items on one task."""
+  azureTodoChecklistItems(listId: String!, taskId: String!): [AzureTodoChecklistItem!]!
+}
+
+extend type Mutation {
+  azureCreateTodoList(input: AzureTodoTaskListInput!): AzureTodoTaskList
+  azureUpdateTodoList(listId: String!, input: AzureTodoTaskListInput!): AzureTodoTaskList
+  azureDeleteTodoList(listId: String!): Boolean
+
+  azureCreateTodoTask(listId: String!, input: AzureTodoTaskCreateInput!): AzureTodoTask
+  azureUpdateTodoTask(listId: String!, taskId: String!, input: AzureTodoTaskUpdateInput!): AzureTodoTask
+  """Set the task status to `completed`; Graph stamps completedDateTime."""
+  azureCompleteTodoTask(listId: String!, taskId: String!): AzureTodoTask
+  azureDeleteTodoTask(listId: String!, taskId: String!): Boolean
+
+  azureCreateTodoChecklistItem(
+    listId: String!
+    taskId: String!
+    input: AzureTodoChecklistItemInput!
+  ): AzureTodoChecklistItem
+  azureUpdateTodoChecklistItem(
+    listId: String!
+    taskId: String!
+    checklistItemId: String!
+    input: AzureTodoChecklistItemUpdateInput!
+  ): AzureTodoChecklistItem
+  azureDeleteTodoChecklistItem(listId: String!, taskId: String!, checklistItemId: String!): Boolean
 }
