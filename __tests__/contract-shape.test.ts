@@ -31,7 +31,12 @@ import ApiError from '@reactory/server-core/exceptions';
 // eslint-disable-next-line import/first
 import services from '../services';
 // eslint-disable-next-line import/first
-import models, { AzureAuditLog, AzureToken } from '../models';
+import models, {
+  AzureAuditLog,
+  AzureToken,
+  AzureSyncState,
+  AzureSubscription,
+} from '../models';
 // eslint-disable-next-line import/first
 import forms from '../forms';
 // eslint-disable-next-line import/first
@@ -106,7 +111,12 @@ describe('services barrel', () => {
       expect(typeof definition.name).toBe('string');
       expect(typeof definition.service).toBe('function');
 
-      const instance = definition.service({}, { getService: () => undefined, error: () => undefined });
+      // Explicit return types: the repo runs with `noImplicitAny: true`, which
+      // reports a bare `() => undefined` as TS7011 (it did, before this ticket).
+      const instance = definition.service({}, {
+        getService: (): undefined => undefined,
+        error: (): undefined => undefined,
+      });
       expect(instance).toBeTruthy();
       expect(instance.name).toBe(definition.name);
       expect(instance.nameSpace).toBe('azure');
@@ -140,19 +150,41 @@ describe('services barrel', () => {
   });
 });
 
-describe('models and empty barrels', () => {
-  it('registers exactly the two AZ-01 models', () => {
-    expect(models).toHaveLength(2);
-    expect((models as any[]).map((definition) => definition.name)).toEqual(['AzureToken', 'AzureAuditLog']);
+describe('models and module barrels', () => {
+  // AZ-01 registered AzureToken and AzureAuditLog; AZ-12 is the only later
+  // ticket permitted to append to models/index.ts, and adds the sync cursor and
+  // the change-notification subscription.
+  it('registers the AZ-01 models plus the AZ-12 sync models', () => {
+    expect(models).toHaveLength(4);
+    expect((models as any[]).map((definition) => definition.name)).toEqual([
+      'AzureToken',
+      'AzureAuditLog',
+      'AzureSyncState',
+      'AzureSubscription',
+    ]);
     expect(AzureToken.modelName).toBe('AzureToken');
     expect(AzureToken.collection.name).toBe('azure_tokens');
     expect(AzureAuditLog.collection.name).toBe('azure_audit_logs');
+    expect(AzureSyncState.collection.name).toBe('azure_sync_states');
+    expect(AzureSubscription.collection.name).toBe('azure_subscriptions');
   });
 
-  it('contributes no forms, queues or middleware yet', () => {
+  it('contributes no forms, but the AZ-12 queue and webhook surface', () => {
     expect(forms).toEqual([]);
-    expect(queues).toEqual([]);
-    expect(middleware).toEqual([]);
+
+    // Five named queues, defined but not started without a QueueProvider.
+    expect(queues).toHaveLength(5);
+    expect((queues as any[]).map((queue) => queue.name)).toEqual([
+      'azure-mail-sync',
+      'azure-calendar-sync',
+      'azure-drive-sync',
+      'azure-webhook-process',
+      'azure-subscription-renew',
+    ]);
+
+    // One module-scoped middleware: the webhook JSON body guard.
+    expect(middleware).toHaveLength(1);
+    expect(typeof middleware[0]).toBe('function');
   });
 });
 

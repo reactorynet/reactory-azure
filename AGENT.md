@@ -51,8 +51,8 @@ not fix it: it may not modify the host `package.json` and may not restart the se
 | 9 | `azure.AzureDocumentService@1.0.0` | AZ-09 | implemented — template copy with text substitution, `.docx` text extraction (headers/footnotes/text boxes may be lost), 2 MB-capped PDF conversion, whole-file replace; no body editing (no server-side API) |
 | 10 | `azure.AzureWorkbookService@1.0.0` | AZ-10 | stub — worksheets, ranges, tables, sessions |
 | 11 | `azure.AzureContactsService@1.0.0` | AZ-11 | implemented — contacts CRUD + folders, people `$search` (nextLink-only paging), `/users` directory behind the User.Read* gate, photos (`null` only on ImageNotFound) |
-| 12 | `azure.AzureSyncService@1.0.0` | AZ-12 | stub — delta loops and sync state |
-| 13 | `azure.AzureSubscriptionService@1.0.0` | AZ-12 | stub — change-notification subscriptions and renewal |
+| 12 | `azure.AzureSyncService@1.0.0` | AZ-12 | implemented — messages/events/drive delta loops with `Prefer: IdType="ImmutableId"`, per-page added/updated/deleted batches, persisted `@odata.deltaLink`; a 410 `resyncRequired` performs and records exactly one full resync (never propagated) |
+| 13 | `azure.AzureSubscriptionService@1.0.0` | AZ-12 | implemented — create/resubscribe/renew/delete Graph subscriptions, per-subscription random AES-256-GCM-encrypted `clientState` with constant-time verification, renewal at 80% of the granted lifetime (no hardcoded TTL) |
 | 14 | `azure.AzureTeamsService@1.0.0` | AZ-14 | stub — chats, channels, messages, presence |
 | 15 | `azure.AzureSharePointService@1.0.0` | AZ-15 | stub — sites, lists, items, columns |
 | 16 | `azure.AzureBlobStorageService@1.0.0` | AZ-16 | implemented — Blob Storage v12 data plane: containers, blobs (listBlobs = one page, listAllBlobs follows the token), streams, SAS URLs |
