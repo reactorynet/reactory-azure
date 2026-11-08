@@ -1,15 +1,25 @@
 {
   "name": "@reactory/azure",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "displayName": "Reactory Azure Module",
-  "description": "Reactory Azure Module - provides Azure specific services and components for the reactory eco-system.",
+  "description": "Reactory Azure Module - Microsoft Graph integration (mail, calendar, files, workbooks, contacts, tasks, Teams, SharePoint) and Azure Blob Storage for the reactory eco-system.",
   "module": "@reactory/azure",
+  "main": "index.ts",
   "files": [
     "dist",
     "docs",
     "branding"
   ],
   "type": "commonjs",
+  "keywords": [
+    "azure",
+    "microsoft-graph",
+    "outlook",
+    "onedrive",
+    "sharepoint",
+    "teams",
+    "reactory"
+  ],
   "author": {
     "name": "Werner Weber",
     "email": "werner.webere@reactory.net"
@@ -19,6 +29,7 @@
       "license": "MIT"
     }
   ],
+  "license": "MIT",
   "moduleNameMapper": {
     "^reactory/azure(.*)$": "<rootDir>/src/"
   },
@@ -27,8 +38,10 @@
     "url": "https://github.com/reactorynet/reactory-azure.git"
   },
   "dependencies": {
-    "@azure/msal-browser": "3.19.0",
+    "@azure/msal-node": "^2.16.2",
     "@azure/storage-blob": "12.23.0",
-    "@azure/storage-file-share": "12.23.0"
+    "@azure/storage-file-share": "12.23.0",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
+    "@microsoft/microsoft-graph-types": "^2.40.0"
   }
 }

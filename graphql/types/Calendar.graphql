@@ -1,0 +1,8 @@
+# Calendar GraphQL surface - STUB created by AZ-01.
+#
+# TODO(AZ-07): AZ-07 replaces the placeholder field below with the real
+# queries and mutations. The file exists so AZ-07 never has to edit
+# graphql/types/index.ts, which is loaded eagerly and owned by AZ-01.
+extend type Query {
+  _azureCalendarPlaceholder: Boolean
+}

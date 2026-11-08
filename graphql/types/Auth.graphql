@@ -1,0 +1,46 @@
+# Microsoft Graph authentication surface (AZ-01).
+#
+# `LEGACY` is a first-class status: the user has no AzureToken row but the User
+# document still carries a Microsoft access token from the legacy sign-in flow.
+# That token is never cached and never refreshed by this module, and its scopes
+# are reported as `legacy:unverified` rather than as an empty grant.
+
+enum AzureConnectionStatus {
+  DISCONNECTED
+  AUTHORIZING
+  CONNECTED
+  TOKEN_EXPIRED
+  REVOKED
+  LEGACY
+}
+
+type AzureConnection {
+  userId: String!
+  status: AzureConnectionStatus!
+  "User principal name of the connected Microsoft account."
+  email: String
+  upn: String
+  tenantId: String
+  grantedScopes: [String!]!
+  "vault for an AzureToken row, legacy for the User-document token."
+  tokenSource: String
+  connectedAt: DateTime
+  lastRefreshedAt: DateTime
+  expiresAt: DateTime
+}
+
+type AzureAuthUrl {
+  url: String!
+}
+
+extend type Query {
+  "Current Microsoft Graph connection state for the calling user."
+  azureConnectionStatus: AzureConnection
+}
+
+extend type Mutation {
+  "Start the PKCE authorization flow; `services` are capability keys (mail, calendar, drive, ...)."
+  azureAuthUrl(services: [String!]): AzureAuthUrl
+  "Mark the vaulted token revoked and drop the cached token."
+  azureDisconnect: Boolean
+}
