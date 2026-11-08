@@ -1,11 +1,24 @@
 import Reactory from '@reactorynet/reactory-core';
 import AzureToken from './AzureToken';
 import AzureAuditLog from './AzureAuditLog';
+import AzureSyncState from './AzureSyncState';
+import AzureSubscription from './AzureSubscription';
 
-export { AzureToken, AzureAuditLog };
+export { AzureToken, AzureAuditLog, AzureSyncState, AzureSubscription };
 
 export type { IAzureToken, IAzureTokenDocument } from './AzureToken';
 export type { IAzureAuditLog, IAzureAuditLogDocument } from './AzureAuditLog';
+export type {
+  IAzureSyncState,
+  IAzureSyncStateDocument,
+  AzureSyncResource,
+  AzureSyncStatus,
+} from './AzureSyncState';
+export type {
+  IAzureSubscription,
+  IAzureSubscriptionDocument,
+  AzureSubscriptionResource,
+} from './AzureSubscription';
 
 /**
  * Model definitions contributed to the Reactory model registry.
@@ -34,6 +47,30 @@ export const ModelDefinitions: Reactory.IReactoryComponentDefinition<any>[] = [
     stem: 'azure-audit-log',
     tags: ['azure', 'audit', 'log'],
     component: AzureAuditLog,
+    domain: Reactory.ComponentDomain.model,
+    overwrite: false,
+    roles: [],
+  },
+  {
+    nameSpace: 'azure',
+    name: 'AzureSyncState',
+    version: '1.0.0',
+    description: 'Microsoft Graph delta cursor per user and resource',
+    stem: 'azure-sync-state',
+    tags: ['azure', 'sync', 'delta'],
+    component: AzureSyncState,
+    domain: Reactory.ComponentDomain.model,
+    overwrite: false,
+    roles: [],
+  },
+  {
+    nameSpace: 'azure',
+    name: 'AzureSubscription',
+    version: '1.0.0',
+    description: 'Microsoft Graph change-notification subscription with encrypted clientState',
+    stem: 'azure-subscription',
+    tags: ['azure', 'subscription', 'webhook'],
+    component: AzureSubscription,
     domain: Reactory.ComponentDomain.model,
     overwrite: false,
     roles: [],
