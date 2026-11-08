@@ -1,8 +1,247 @@
-# Drive GraphQL surface - STUB created by AZ-01.
+# OneDrive GraphQL surface (AZ-08).
 #
-# TODO(AZ-08): AZ-08 replaces the placeholder field below with the real
-# queries and mutations. The file exists so AZ-08 never has to edit
-# graphql/types/index.ts, which is loaded eagerly and owned by AZ-01.
+# Every field resolves `azure.AzureDriveService@1.0.0`; the resolver is a thin
+# adapter and carries no Graph knowledge of its own.
+#
+# Deliberate omission: there is no `downloadUrl` field anywhere. Graph's content
+# and thumbnail URLs are pre-authenticated, so exposing one would let a client
+# bypass the user's Microsoft grant. Byte transfer goes through
+# `GET /azure/files/:itemId` (and `/thumbnail`), which proxies the stream.
+
+"""What an item actually is - derived from the Graph facets."""
+enum AzureDriveItemKind {
+  FILE
+  FOLDER
+  PACKAGE
+  UNKNOWN
+}
+
+"""Storage quota of a drive."""
+type AzureDriveQuota {
+  deleted: Float
+  remaining: Float
+  total: Float
+  used: Float
+  state: String
+}
+
+"""A user, group or application identity."""
+type AzureDriveIdentity {
+  id: String
+  displayName: String
+  email: String
+}
+
+"""A drive: the user's OneDrive, or one entry of `/drives`."""
+type AzureDrive {
+  id: String!
+  name: String
+  description: String
+  driveType: String
+  webUrl: String
+  createdDateTime: DateTime
+  lastModifiedDateTime: DateTime
+  "Unwrapped from Graph's identitySet: `{ user: {...} }` -> the user identity."
+  owner: AzureDriveIdentity
+  quota: AzureDriveQuota
+}
+
+"""The `folder` facet (its presence marks an item as a folder)."""
+type AzureDriveFolderFacet {
+  childCount: Int
+}
+
+"""The `file` facet (its presence marks an item as a file)."""
+type AzureDriveFileFacet {
+  mimeType: String
+  quickXorHash: String
+  sha1Hash: String
+}
+
+"""Where an item lives."""
+type AzureDriveParentReference {
+  id: String
+  driveId: String
+  driveType: String
+  name: String
+  path: String
+  siteId: String
+  shareId: String
+}
+
+"""An item's sharing state."""
+type AzureDriveSharedFacet {
+  scope: String
+  "Unwrapped from Graph's identitySet: `{ user: {...} }` -> the user identity."
+  owner: AzureDriveIdentity
+}
+
+"""A file, folder or package in a drive."""
+type AzureDriveItem {
+  id: String!
+  name: String
+  size: Float
+  webUrl: String
+  createdDateTime: DateTime
+  lastModifiedDateTime: DateTime
+  eTag: String
+  cTag: String
+  createdBy: AzureDriveIdentity
+  lastModifiedBy: AzureDriveIdentity
+  parentReference: AzureDriveParentReference
+  folder: AzureDriveFolderFacet
+  file: AzureDriveFileFacet
+  shared: AzureDriveSharedFacet
+  "Derived from the facets: FILE, FOLDER, PACKAGE or UNKNOWN."
+  kind: AzureDriveItemKind
+  "Convenience alias for `file.mimeType`."
+  mimeType: String
+  isFolder: Boolean!
+  "Convenience alias for `folder.childCount`."
+  childCount: Int
+}
+
+"""One page of drive items; pass `nextLink` back to continue."""
+type AzureDriveItemPage {
+  items: [AzureDriveItem!]!
+  nextLink: String
+  count: Int
+}
+
+"""A share link on an item."""
+type AzureDriveShareLink {
+  type: String
+  scope: String
+  webUrl: String
+}
+
+"""The invitation that created a permission."""
+type AzureDriveInvitation {
+  email: String
+  signInRequired: Boolean
+  invitedDateTime: DateTime
+  invitedBy: AzureDriveIdentity
+}
+
+"""A sharing permission on an item."""
+type AzureDrivePermission {
+  id: String!
+  roles: [String!]
+  shareId: String
+  hasPassword: Boolean
+  expirationDateTime: DateTime
+  link: AzureDriveShareLink
+  "The principal the permission was granted to, resolved to its display identity."
+  grantedTo: AzureDriveIdentity
+  invitation: AzureDriveInvitation
+  inheritedFrom: AzureDriveParentReference
+}
+
+"""A previous version of a file."""
+type AzureDriveVersion {
+  id: String!
+  lastModifiedDateTime: DateTime
+  size: Float
+  "Unwrapped from Graph's identitySet: `{ user: {...} }` -> the user identity."
+  lastModifiedBy: AzureDriveIdentity
+  publicationLevel: String
+}
+
+"""The outcome of an asynchronous copy."""
+type AzureDriveCopyResult {
+  "completed, inProgress or failed."
+  status: String!
+  "Graph's monitor URL. It carries no credential of its own."
+  monitorUrl: String
+  itemId: String
+  item: AzureDriveItem
+  message: String
+}
+
 extend type Query {
-  _azureDrivePlaceholder: Boolean
+  "The calling user's default OneDrive."
+  azureDrive: AzureDrive
+  "Every drive the calling user can reach."
+  azureDrives: [AzureDrive!]!
+  "One page of a folder's children; omit `itemId` for the drive root."
+  azureDriveItems(
+    driveId: String
+    itemId: String
+    nextLink: String
+    top: Int
+    orderBy: String
+    select: [String!]
+  ): AzureDriveItemPage!
+  "An item by id, or by path when `itemId` is omitted."
+  azureDriveItem(driveId: String, itemId: String, path: String): AzureDriveItem
+  "Search the drive's content; `query` is quoted and encoded by the service."
+  azureDriveSearch(driveId: String, query: String!, top: Int, nextLink: String): AzureDriveItemPage!
+  "Every permission on an item."
+  azureDrivePermissions(driveId: String, itemId: String!): [AzureDrivePermission!]!
+  "Every retained version of a file."
+  azureDriveVersions(driveId: String, itemId: String!): [AzureDriveVersion!]!
+}
+
+extend type Mutation {
+  "Create a folder under `parentId`, or in the drive root."
+  azureCreateDriveFolder(
+    driveId: String
+    name: String!
+    parentId: String
+    conflictBehavior: String
+  ): AzureDriveItem
+
+  "Upload a file. Content is base64-encoded so it survives GraphQL transport."
+  azureUploadDriveItem(
+    driveId: String
+    parentId: String
+    name: String!
+    contentBase64: String!
+    contentType: String
+    conflictBehavior: String
+  ): AzureDriveItem
+
+  "Move (and optionally rename) an item into another folder."
+  azureMoveDriveItem(driveId: String, itemId: String!, parentId: String!, name: String): AzureDriveItem
+
+  "Copy an item; waits for Graph's copy monitor unless `wait` is false."
+  azureCopyDriveItem(
+    driveId: String
+    itemId: String!
+    parentId: String!
+    name: String
+    wait: Boolean
+  ): AzureDriveCopyResult!
+
+  "Move an item to the recycle bin."
+  azureDeleteDriveItem(driveId: String, itemId: String!): Boolean
+
+  "Restore an item from the recycle bin."
+  azureRestoreDriveItem(driveId: String, itemId: String!): AzureDriveItem
+
+  "Create an anonymous or organisation-scoped share link."
+  azureShareDriveItem(
+    driveId: String
+    itemId: String!
+    type: String
+    scope: String
+    expirationDateTime: DateTime
+    password: String
+  ): AzureDrivePermission
+
+  "Grant read or write access to a list of email addresses."
+  azureInviteDriveCollaborators(
+    driveId: String
+    itemId: String!
+    recipients: [String!]!
+    role: String
+    message: String
+    sendInvitation: Boolean
+  ): [AzureDrivePermission!]!
+
+  "Remove a permission from an item."
+  azureDeleteDrivePermission(driveId: String, itemId: String!, permissionId: String!): Boolean
+
+  "Restore a previous version of a file."
+  azureRestoreDriveVersion(driveId: String, itemId: String!, versionId: String!): Boolean
 }
