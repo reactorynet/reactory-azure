@@ -149,8 +149,30 @@ describe('models and empty barrels', () => {
     expect(AzureAuditLog.collection.name).toBe('azure_audit_logs');
   });
 
-  it('contributes no forms, queues or middleware yet', () => {
-    expect(forms).toEqual([]);
+  it('wires exactly the nine AZ-17 forms and still contributes no queues or middleware', () => {
+    // AZ-17 fills the barrel AZ-01 created, without touching this module
+    // definition. This guard used to assert the barrel was empty, then (too
+    // weakly) that it was merely non-empty — which a wrong-but-populated barrel
+    // would satisfy. It now pins the actual surface, using the same names and
+    // order `__tests__/forms.test.ts` asserts, so the AZ-01 wiring guard and the
+    // AZ-17 contract cannot drift apart.
+    const expectedFormNames = [
+      'AzureAccountConnectionForm',
+      'AzureMailInboxForm',
+      'AzureMailComposeForm',
+      'AzureCalendarViewForm',
+      'AzureCalendarEventForm',
+      'AzureDriveExplorerForm',
+      'AzureWorkbookViewForm',
+      'AzureContactsManagerForm',
+      'AzureTodoManagerForm',
+    ];
+
+    expect(forms).toHaveLength(expectedFormNames.length);
+    expect(forms.map((form) => form.name)).toEqual(expectedFormNames);
+    expect(forms.map((form) => form.id)).toEqual(
+      expectedFormNames.map((name) => `azure.${name}@1.0.0`),
+    );
     expect(queues).toEqual([]);
     expect(middleware).toEqual([]);
   });

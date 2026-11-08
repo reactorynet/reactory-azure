@@ -149,6 +149,195 @@ deliberately **no** `downloadUrl` field: content and thumbnails are streamed by 
 above so a pre-authenticated storage URL never reaches a client. `azureUploadDriveItem` takes
 base64 because GraphQL has no binary scalar.
 
+## Forms (AZ-17)
+
+`forms/index.ts` was created empty by AZ-01 and is filled by AZ-17. The root `index.ts` is
+untouched: it already wires `forms: Forms`, so the barrel is the only file that changed.
+
+**Nine forms — and that is a deliberate superset of `reactory-google`'s eight, not parity.**
+The ninth is `AzureWorkbookViewForm`; `azureWorkbook*` is a first-class Graph surface here
+(worksheets, ranges, tables, append/update with workbook-session control) and folding it into
+the Drive explorer would hide it. It is an addition, not a mirror of a Google form.
+
+| Form | Read | Writes |
+|---|---|---|
+| `AzureAccountConnectionForm` | `azureConnectionStatus` | `azureAuthUrl`, `azureDisconnect` |
+| `AzureMailInboxForm` | `azureMailMessages` | — |
+| `AzureMailComposeForm` | — | `azureSendMail` |
+| `AzureCalendarViewForm` | `azureCalendarView` | — |
+| `AzureCalendarEventForm` | `azureCalendarEvent` | `azureCreateEvent`, `azureUpdateEvent`, `azureDeleteEvent` |
+| `AzureDriveExplorerForm` | `azureDriveItems` | `azureCreateDriveFolder`, `azureDeleteDriveItem` |
+| `AzureWorkbookViewForm` | `azureWorkbookRange` | `azureAppendWorkbookRows`, `azureUpdateWorkbookRange` |
+| `AzureContactsManagerForm` | `azureContacts` | `azureCreateContact`, `azureUpdateContact`, `azureDeleteContact` |
+| `AzureTodoManagerForm` | `azureTodoTasks` | `azureCreateTodoTask`, `azureUpdateTodoTask`, `azureDeleteTodoTask` |
+
+Every form is a `Reactory.Forms.IReactoryForm` in the `azure` namespace, id
+`azure.<Name>@1.0.0`, with `schema.type === 'object'` and `roles: ['USER']`.
+
+### The two client read paths
+
+A form can display a read payload in two ways, and **one** definition decides which
+applies:
+
+**Path A — the form-level data manager.** `useGraphQLDataManager.transformData` shapes
+`data.data[query.name]` by `schema.type` (object: spread, array: copy; anything else: the
+whole `data`) and then applies `resultMap`. It never reads `resultType` — the only code
+that does, `ReactoryFormDataManager.fromGraphResult`, has no callers — so no form declares
+`resultType`. For this path the payload must land on a **declared property**.
+
+**Path B — the grid's own fetch.** `MaterialTableWidget` with
+`ui:options.remoteData: true` runs its *own* query on mount, maps its variables from
+`{ formContext, query, props }`, wraps an **array** root field as
+`{ data: rawResultData }` and renders `data.data`. It never calls `transformData`, so
+`schema.type` does not constrain it. This is the only way a list-returning root can be
+shown while every form stays `type: 'object'`, and two shipped client forms use it
+(`myCommentsForm`, `content-management`).
+
+`graphql.queries` therefore is **not** dead: it is exactly what a Path B grid names
+through `ui:options.query`, and the form-level manager ignores it (it needs a `queryKey`
+that `useDataManager` never passes). The suite asserts reference integrity in both
+directions — every `queries` entry is named by some widget, and every `ui:options.query`
+names an existing entry. An earlier revision banned the block outright, which was wrong.
+
+### Read reachability
+
+| Form | Read | Path | Reached |
+|---|---|---|---|
+| `AzureAccountConnectionForm` | `azureConnectionStatus` | A | full `resultMap` onto declared fields |
+| `AzureMailInboxForm` | `azureMailMessages` | A | page object → `resultMap` `{items, nextLink, count}`; `items` grid |
+| `AzureCalendarViewForm` | `azureCalendarView` (`queries.calendarView`) | **B** | `remoteData` grid → `{data: [...]}` → `events`; variables from `formContext.formData` |
+| `AzureCalendarEventForm` | `azureCalendarEvent` | A | `resultMap` with dotted keys (`body.content`, `start.dateTime`, …) |
+| `AzureDriveExplorerForm` | `azureDriveItems` | A | page object → `resultMap` `{items, nextLink, count}`; `items` grid |
+| `AzureWorkbookViewForm` | `azureWorkbookRange` | A | range object → `resultMap` `{address, values}` |
+| `AzureContactsManagerForm` | `azureContacts` | A | page object → `resultMap` `{items, nextLink, count}`; `items` grid |
+| `AzureTodoManagerForm` | `azureTodoTasks` (`queries.tasks`) | **B** | `remoteData` grid → `{data: [...]}` → `items`; variables from `formContext.formData` |
+| `AzureMailComposeForm` | none | — | write-only |
+
+All nine reads are displayable. `DOCUMENTED_UNREACHABLE_READS` in the suite is **empty**;
+the map and its check are kept so a future exception must be written down deliberately
+and mirrored here.
+
+**Correction worth keeping:** revisions 1–3 claimed the two list-returning roots could not
+be displayed and needed "client support". That was false — the support is
+`ui:options.remoteData`, which the client already ships. A list payload is displayable
+through a `remoteData` grid, and only through one: a client that renders these forms
+without `MaterialTableWidget` (the v5 engine, see the constraint below) will not show the
+rows.
+
+### Constraint: i18n keys are resolved by the default form engine only
+
+Every label here is a dotted `azure.forms.*` key. The legacy ("fork") form engine's
+title/field components call `reactory.i18n.t`, so labels resolve once the bundle is
+shipped. The **v5** engine's `TitleFieldTemplate`/`FieldTemplate` contain no i18n call at
+all, so flipping `forms.useV5Engine` would render the raw keys as visible headings. That is
+a ticket-independent platform constraint, recorded for whoever flips it — this module keeps
+using keys because the ticket requires externalised strings.
+
+### The two maps, and why their orientation matters
+
+* `variables` is **source → variable**. The client builds
+  `kwargs = { form, formData, formContext, reactory, api, props }` and calls
+  `objectMapper(kwargs, parseObjectMap(map))`, so the object KEY is the form path and the
+  VALUE is the GraphQL variable name — `{ 'formData.itemId': 'itemId' }`, as
+  `reactory-product` and `reactory-classroom` write it. The inverse spelling resolves no
+  source and `objectMapper` returns `undefined`, which becomes `variables = {}`: every
+  request then goes out with no variables and every non-null-variable operation fails at
+  Graph with "Variable $x of required type ... was not provided".
+* `resultMap` is keyed by the properties of the object **under** the root field, because the
+  data manager applies it to `data.data[query.name]`. A key prefixed with the root field
+  name (`'azureConnectionStatus.status'`) resolves nothing and the form's data becomes
+  `undefined`.
+
+Nested targets carry the input-object shapes: `'formData.startDateTime': 'start.dateTime'`,
+`'formData.status': 'filter.status'`, `'formData.values': 'input.values'`. Where a bare
+array has to become Graph's `[{ address }]`, `forms/transforms.ts` supplies a function
+transform — `toAddressList`, `toAttendees`, `toTextBodyContentType` — which
+`parseObjectMapper` passes through untouched. Those adapt value shapes only; they never
+name a field the input type does not declare.
+
+### How the suite proves it
+
+`__tests__/forms.test.ts` compiles the module's own `graphql/types/*.graphql` with
+`buildSchema` (prepending only `scalar Any`, `scalar DateTime`, `scalar JSON`,
+`scalar BigInt` and the two base operation types, because the eleven files
+`extend type Query`/`extend type Mutation`), then:
+
+1. validates every document with the real `graphql-js` validator — unknown root field,
+   unknown argument, unknown variable type, and a nullable variable in a non-null position
+   all fail;
+2. requires every `variables` key to be rooted at `formData`/`formContext`/`query` and
+   (for `formData`) to name a declared schema property;
+3. requires every variable the document declares to be produced by the map, and nothing else;
+4. rejects a bare `{ 'formData': <variable> }` in either orientation;
+5. **executes every map with the real `object-mapper`** against form data sampled from the
+   form's own schema, and validates the resulting `variables` recursively against the
+   GraphQL variable types — unknown input-object fields, wrong scalars, wrong enum members
+   and missing non-null fields all fail;
+6. checks every `resultMap` key against the root field's return type (walking dotted
+   paths such as `body.content`), and every `resultMap` value against the declared form
+   properties;
+7. requires **every declared source -> target pair** to produce a value that is present
+   *and* non-null from populated form data — the assertion that catches a transform
+   silently discarding its input, which "the variable is type-valid" cannot, because a
+   missing nullable field is type-valid;
+8. models **both** client read paths for every read: Path A by simulating
+   `transformData`, Path B by validating the `remoteData` grid (declared array property,
+   non-empty `ui:options.columns` whose `field`s resolve in the item schema, and
+   `ui:options.variables` rooted at `formContext`/`query`/`props` that produces every
+   variable the document declares and type-checks against it). A read fails only when
+   **neither** path reaches it;
+9. keeps `graphql.queries` honest in both directions: every entry is named by a widget's
+   `ui:options.query`, and every `ui:options.query` names an existing entry.
+
+Probes run against the suite (each fails as intended, each restored): inverting one map entry
+is reported as "source is not rooted at formData/formContext/query"; mapping
+`'formData.top'` to `'input.top'` is reported as "$input.top is not a field of
+AzureContactInput"; forwarding the whole `formData` is reported in both orientations;
+re-prefixing one `resultMap` key is reported as "not a field of AzureConnection".
+
+Two `object-mapper` builds ship in this estate and they differ in ways that change
+the request: **5.x** omits a target key whose source is absent and flattens an
+array-of-arrays; **6.x** emits `null` instead and preserves the nested array. Arrays of
+objects survive in both. This repository's root resolves 5.0.0, the PWA client pins
+6.2.0 — so the suite loads **both** and runs every mapping assertion against each,
+naming the builds it exercised in any failure. Checking "the key is present" is not
+enough: the assertion requires the target to be present **and** non-null, which is what
+catches a transform that silently discards its input under either build.
+
+The workbook matrix target is `Any`, so a 5.x-flattened payload is still a type-valid
+request; the client sends it intact under 6.x.
+
+### Strings live in `i18n/en.json`
+
+No label is hardcoded. Form `title`/`description`, `schema.title`, every property `title`,
+every `enumNames` entry (including array-item enums) and every `ui:placeholder`/`ui:help`
+is a dotted key built by `forms/i18n.ts` under `azure.forms.*`, resolved from
+`i18n/en.json` — the same externalisation `reactory-google` uses. The suite walks all of
+these strings and fails on a key that does not resolve, on a label that does not start with
+`azure.forms.`, on an enum with fewer labels than values, and on any **orphaned** key left
+in `i18n/en.json` that no form references.
+
+The module defines `translations: []` (AZ-01, frozen), so `i18n/en.json` is a shipped
+asset rather than something the module definition registers — identical to
+`reactory-google`, which also carries `i18n/en.json` with `translations: []`. The server's
+i18n init loads `APP_DATA_ROOT/i18n/<locale>/<namespace>.json` plus i18next resource
+bundles; it does not merge a module's own file. Until this bundle is shipped to
+`reactory-data/i18n/en/azure.json`, rjsf will render the raw dotted keys.
+
+### Constraints the forms encode rather than paper over
+
+- **No assignee on a To Do task.** `AzureTodoTaskCreateInput`/…`UpdateInput` have no
+  `assignedTo`; assignment is Planner (`/planner/tasks`). A form field would be rejected by
+  the service (`UnsupportedTodoTaskAssignment`), so there is none.
+- **Date/time is always `{ dateTime, timeZone }`.** `AzureCalendarDateTimeTimeZoneInput`
+  and `AzureDateTimeTimeZoneInput` make `timeZone` non-null. Each form carries the zone
+  beside the wall clock, and `azureCalendarView` is used for a ranged read because
+  `/me/events` returns recurrence masters.
+- **Workbook values are `Any`, never `[String]`.** `null` is an empty cell and `'#DIV/0!'` is
+  an error; a String matrix would stringify numbers and erase that distinction.
+- **No `downloadUrl`.** The Drive explorer has no such field because the schema has none;
+  bytes go through `GET /azure/files/:itemId`.
+
 ## HTTP surface
 
 Mounted at `/azure` (`index.ts` → `routes: { '/azure': routes }`):
@@ -336,6 +525,7 @@ interface emits `Object`, and no decorator here reads `design:paramtypes`.
 | `__tests__/routes-auth.test.ts` | `/azure/auth/url|callback|status|disconnect`: success, 401/503/500, redirect defaults, missing params |
 | `__tests__/drive-service.test.ts` (84) | `downloadItem` two-hop redirect with no `Authorization` on the storage host, 404 `itemNotFound` → `ApiError`, copy monitor (completed/inProgress/302/failure/drain), upload-session 202 and unreadable-body fallbacks, every `toNodeStream` body shape, error-body parsing and its 1 MiB cap, item scrubbing (including a null thumbnail set), `/azure/files` proxy headers, 401/404/500/502/503, stream error before/after headers, client disconnect, all resolver mutations and identity unwrapping |
 | `__tests__/drive.request-shape.test.ts` (40) | segment/query encoding (`a b#c?.txt`, search quoting), item/parent/drive paths, write bodies, simple upload at 4 MiB, resumable fragments at 320 KiB multiples with no bearer token, 416 resume, thumbnail path, and the **production `fetch` transport** (`redirect: 'manual'`, header normalisation, typed no-fetch failure) |
+| `__tests__/forms.test.ts` (20) | the nine forms and their names; ids unique, `azure`-namespaced and normalised; `schema.type === 'object'` with a non-empty `properties`; `required` ⊆ declared properties; every `uiSchema` key ⊆ declared properties; per-form document counts; every GraphQL document validated with `graphql-js` against `graphql/types/*.graphql` with `name` == the root field in the matching operation; no `graphql.queries` block; every `variables` source rooted at formData/formContext/query and naming a declared property; every declared variable produced by the map and nothing else; no whole-`formData` forwarding in either orientation; every map executed with **both** object-mapper builds (5.x and 6.x) and the variables validated against the GraphQL types; **every declared source -> target pair present and non-null under both builds**; **every read payload tied to a declared property or a documented list-payload exception**; every `resultMap` key (dotted paths included) on the return type with every target a declared property; a resultMap run over a full sample; the workbook matrix characterisation; every label an `azure.forms.*` key that resolves (grid column titles included); enum members fully labelled; no orphaned i18n key |
 
 All tests mock the Graph layer: **no live Graph call is made** in this repository. The drive
 suites replace the byte transport via `setDriveHttpClient` and mock the SDK, so the redirect and
@@ -348,7 +538,7 @@ fragment assertions run without a tenant or a network.
 | `index.ts`, `services/index.ts`, `graphql/types/index.ts`, `graphql/resolvers/index.ts`, `routes/index.ts`, `middleware/index.ts`, `ai/macros/index.ts`, `types/index.ts` | nobody — a later ticket that needs a change here must stop and raise |
 | `ai/macros/<domain>.macros.ts` | AZ-13 (status/mail/calendar/drive/workbook/contacts/tasks), AZ-14 (teams) |
 | `models/index.ts` | AZ-12 appends two models (the only permitted edit) |
-| `forms/index.ts` | AZ-17 |
+| `forms/index.ts` | AZ-17 — the barrel AZ-01 created is filled with nine forms; no root `index.ts` edit |
 | `queues/index.ts`, `routes/webhooks.ts`, `middleware/webhook-verification.ts` | AZ-12 |
 | `routes/proxy.ts` | AZ-08 |
 
