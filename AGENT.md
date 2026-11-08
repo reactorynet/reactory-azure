@@ -55,7 +55,7 @@ not fix it: it may not modify the host `package.json` and may not restart the se
 | 13 | `azure.AzureSubscriptionService@1.0.0` | AZ-12 | stub — change-notification subscriptions and renewal |
 | 14 | `azure.AzureTeamsService@1.0.0` | AZ-14 | stub — chats, channels, messages, presence |
 | 15 | `azure.AzureSharePointService@1.0.0` | AZ-15 | stub — sites, lists, items, columns |
-| 16 | `azure.AzureBlobStorageService@1.0.0` | AZ-16 | stub — Blob Storage v12 data plane |
+| 16 | `azure.AzureBlobStorageService@1.0.0` | AZ-16 | implemented — Blob Storage v12 data plane: containers, blobs (listBlobs = one page, listAllBlobs follows the token), streams, SAS URLs |
 
 Every stub throws `ApiError('not implemented', { ticket })`. No method returns `[]`,
 `null` or any other placeholder on failure.

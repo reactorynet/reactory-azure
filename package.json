@@ -38,6 +38,7 @@
     "url": "https://github.com/reactorynet/reactory-azure.git"
   },
   "dependencies": {
+    "@azure/identity": "^3.4.2",
     "@azure/msal-node": "^2.16.2",
     "@azure/storage-blob": "12.23.0",
     "@azure/storage-file-share": "12.23.0",
