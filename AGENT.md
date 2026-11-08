@@ -46,7 +46,7 @@ not fix it: it may not modify the host `package.json` and may not restart the se
 | 4 | `azure.AzureService@1.0.0` | AZ-01 | implemented — facade exposing every other service plus connection status/disconnect |
 | 5 | `azure.AzureMailService@1.0.0` | AZ-04 | implemented — paged/searchable messages, folders (Redis-cached), categories, conversations |
 | 6 | `azure.AzureTodoService@1.0.0` | AZ-06 | implemented — Microsoft To Do lists, tasks, checklist items over v1.0 `/me/todo`; no `assignedTo` (assignment is Planner) |
-| 7 | `azure.AzureCalendarService@1.0.0` | AZ-07 | stub — calendars, `calendarView`, event CRUD, availability |
+| 7 | `azure.AzureCalendarService@1.0.0` | AZ-07 | implemented — calendars (5 min cache), `calendarView` ranges, event CRUD, RSVP/cancel, `getSchedule`, `findMeetingTimes`, online meetings |
 | 8 | `azure.AzureDriveService@1.0.0` | AZ-08 | implemented — drives, paged children, encoded path/item addressing, redirect-safe download and thumbnail streams, simple/resumable upload, folder/move/copy(monitor)/delete/restore, sharing, versions |
 | 9 | `azure.AzureDocumentService@1.0.0` | AZ-09 | stub — templates, text extraction, PDF conversion (2 MB cap) |
 | 10 | `azure.AzureWorkbookService@1.0.0` | AZ-10 | stub — worksheets, ranges, tables, sessions |
@@ -78,7 +78,7 @@ may edit that barrel.
 | Mail read | `/me/messages`, `/me/mailFolders`, `/me/outlook/masterCategories` | AZ-04 | stub |
 | Mail write | `/me/sendMail`, `/messages/{id}/reply`, drafts, attachments | AZ-05 | not started |
 | Tasks | `/me/todo/lists`, `/me/todo/lists/{id}/tasks`, `…/checklistItems` | AZ-06 | implemented |
-| Calendar | `/me/calendars`, `/me/calendarView`, `/me/calendar/getSchedule`, `/me/findMeetingTimes` | AZ-07 | stub |
+| Calendar | `/me/calendars`, `/me/calendarView`, `/me/calendar/getSchedule`, `/me/findMeetingTimes` | AZ-07 | implemented |
 | Files | `/me/drive`, `/items/{id}/children`, `/content`, upload sessions, permissions | AZ-08 | implemented |
 | Documents | `/items/{id}/content?format=pdf`, template copy | AZ-09 | stub |
 | Workbooks | `/workbook/worksheets`, `…/range`, `…/tables`, `createSession` | AZ-10 | stub |

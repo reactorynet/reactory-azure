@@ -1,8 +1,348 @@
-# Calendar GraphQL surface - STUB created by AZ-01.
+# Microsoft Graph calendar surface (AZ-07).
 #
-# TODO(AZ-07): AZ-07 replaces the placeholder field below with the real
-# queries and mutations. The file exists so AZ-07 never has to edit
-# graphql/types/index.ts, which is loaded eagerly and owned by AZ-01.
+# Two conventions this schema enforces, because Graph does:
+#
+#   * every date/time is a `dateTimeTimeZone` object - never a bare ISO string.
+#     A bare string has no zone, so Graph interprets it in an unspecified one and
+#     a meeting moves by the caller's UTC offset without any error;
+#   * recurrence is `patternedRecurrence` (`pattern` + `range`), not Google's
+#     `recurrence: [String!]`. The object form is the only one that carries
+#     `firstDayOfWeek`, `index` and `recurrenceTimeZone`.
+#
+# Ranged reads use `azureCalendarView` (`/me/calendarView`), not
+# `azureCalendarEvents`: `/me/events` returns recurrence masters, not the
+# occurrences that fall inside a window.
+
+type AzureCalendarDateTimeTimeZone {
+  "An ISO 8601 date/time, zone-local to `timeZone`."
+  dateTime: String!
+  "Windows or IANA zone name, e.g. South Africa Standard Time."
+  timeZone: String!
+}
+
+type AzureCalendarEmailAddress {
+  name: String
+  address: String!
+}
+
+"""
+Microsoft Graph `recipient`: an address wrapped in `emailAddress`. Returning a
+bare AzureCalendarEmailAddress here would make every `organizer` selection fail
+(Cannot return null for non-nullable field ...address), because Graph sends
+{ emailAddress: { name, address } }.
+"""
+type AzureCalendarRecipient {
+  emailAddress: AzureCalendarEmailAddress!
+}
+
+type AzureCalendarPhysicalAddress {
+  street: String
+  city: String
+  state: String
+  countryOrRegion: String
+  postalCode: String
+  type: String
+}
+
+type AzureCalendarLocation {
+  displayName: String
+  locationType: String
+  locationEmailAddress: String
+  uniqueId: String
+  uniqueIdType: String
+  address: AzureCalendarPhysicalAddress
+}
+
+type AzureCalendarEventBody {
+  contentType: String
+  content: String
+}
+
+type AzureCalendarResponseStatus {
+  response: String
+  time: DateTime
+}
+
+type AzureCalendarOnlineMeeting {
+  "The join link Graph created. Read-only: this module never synthesises one."
+  joinUrl: String
+  conferenceId: String
+  tollNumber: String
+  quickDial: String
+  tollFreeNumbers: [String!]
+  dialInUrl: String
+}
+
+type AzureCalendarRecurrencePattern {
+  "daily | weekly | absoluteMonthly | relativeMonthly | absoluteYearly | relativeYearly"
+  type: String!
+  interval: Int
+  month: Int
+  dayOfMonth: Int
+  daysOfWeek: [String!]
+  firstDayOfWeek: String
+  "first | second | third | fourth | last (relative patterns only)."
+  index: String
+}
+
+type AzureCalendarRecurrenceRange {
+  "endDate | noEnd | numbered"
+  type: String!
+  startDate: String
+  endDate: String
+  numberOfOccurrences: Int
+  recurrenceTimeZone: String
+}
+
+"Microsoft Graph patternedRecurrence - the only supported recurrence shape."
+type AzureCalendarPatternedRecurrence {
+  pattern: AzureCalendarRecurrencePattern!
+  range: AzureCalendarRecurrenceRange!
+}
+
+type AzureCalendarAttendee {
+  type: String
+  status: AzureCalendarResponseStatus
+  emailAddress: AzureCalendarEmailAddress
+}
+
+type AzureCalendarEvent {
+  id: String!
+  subject: String
+  bodyPreview: String
+  body: AzureCalendarEventBody
+  start: AzureCalendarDateTimeTimeZone!
+  end: AzureCalendarDateTimeTimeZone!
+  originalStartTimeZone: String
+  originalEndTimeZone: String
+  location: AzureCalendarLocation
+  locations: [AzureCalendarLocation!]
+  "Graph `recipient` - { emailAddress: { name, address } }."
+  organizer: AzureCalendarRecipient
+  attendees: [AzureCalendarAttendee!]
+  isAllDay: Boolean
+  isCancelled: Boolean
+  isOnlineMeeting: Boolean
+  onlineMeetingProvider: String
+  onlineMeeting: AzureCalendarOnlineMeeting
+  "Present on a recurring master (type: seriesMaster) and on its instances."
+  recurrence: AzureCalendarPatternedRecurrence
+  seriesMasterId: String
+  "singleInstance | occurrence | exception | seriesMaster"
+  type: String
+  responseStatus: AzureCalendarResponseStatus
+  webLink: String
+  createdDateTime: DateTime
+  lastModifiedDateTime: DateTime
+  iCalUId: String
+  categories: [String!]
+  sensitivity: String
+  showAs: String
+  importance: String
+  hasAttachments: Boolean
+  reminderMinutesBeforeStart: Int
+  isReminderOn: Boolean
+  changeKey: String
+}
+
+type AzureCalendar {
+  id: String!
+  name: String
+  color: String
+  hexColor: String
+  changeKey: String
+  canEdit: Boolean
+  canShare: Boolean
+  canViewPrivateItems: Boolean
+  canEditProperties: Boolean
+  owner: AzureCalendarEmailAddress
+  allowedOnlineMeetingProviders: [String!]
+  defaultOnlineMeetingProvider: String
+  isDefaultCalendar: Boolean
+}
+
+type AzureCalendarTimeZoneBase {
+  name: String
+}
+
+type AzureCalendarWorkingHours {
+  daysOfWeek: [String!]
+  startTime: String
+  endTime: String
+  timeZone: AzureCalendarTimeZoneBase
+}
+
+type AzureCalendarFreeBusyError {
+  message: String
+  responseCode: String
+}
+
+"""
+v1.0 graph.scheduleItem exposes no organizer (isPrivate, start, end, status,
+subject, location only). The field was removed rather than left as a
+permanently-null phantom a client could mistake for no organizer.
+"""
+type AzureCalendarScheduleItem {
+  isPrivate: Boolean
+  start: AzureCalendarDateTimeTimeZone
+  end: AzureCalendarDateTimeTimeZone
+  status: String
+  subject: String
+  location: String
+}
+
+type AzureCalendarScheduleInformation {
+  scheduleId: String!
+  scheduleItems: [AzureCalendarScheduleItem!]
+  "Digits, one per availabilityViewInterval minutes: 0 free, 1 tentative, 2 busy, 3 oof, 4 working elsewhere."
+  availabilityView: String
+  workingHours: AzureCalendarWorkingHours
+  error: AzureCalendarFreeBusyError
+}
+
+type AzureCalendarAttendeeAvailability {
+  "Graph `attendeeBase` extends `recipient` - { emailAddress: { name, address } }."
+  attendee: AzureCalendarRecipient
+  availability: String
+}
+
+type AzureCalendarMeetingTimeSlot {
+  start: AzureCalendarDateTimeTimeZone!
+  end: AzureCalendarDateTimeTimeZone!
+  startTimeZone: AzureCalendarTimeZoneBase
+  endTimeZone: AzureCalendarTimeZoneBase
+}
+
+type AzureCalendarMeetingTimeSuggestion {
+  confidence: Float
+  order: Int
+  organizerAvailability: String
+  attendeeAvailability: [AzureCalendarAttendeeAvailability!]
+  locations: [AzureCalendarLocation!]
+  meetingTimeSlot: AzureCalendarMeetingTimeSlot
+  suggestionReason: String
+}
+
+type AzureCalendarMeetingTimesResult {
+  meetingTimeSuggestions: [AzureCalendarMeetingTimeSuggestion!]!
+  "Populated only when Graph could not suggest a time."
+  emptySuggestionsReason: String
+}
+
+input AzureCalendarDateTimeTimeZoneInput {
+  dateTime: String!
+  timeZone: String!
+}
+
+input AzureCalendarEmailAddressInput {
+  name: String
+  address: String!
+}
+
+input AzureCalendarLocationInput {
+  displayName: String
+  locationType: String
+  locationEmailAddress: String
+}
+
+input AzureCalendarAttendeeInput {
+  emailAddress: AzureCalendarEmailAddressInput!
+  "required | optional | resource (defaults to required)."
+  type: String
+}
+
+input AzureCalendarRecurrencePatternInput {
+  type: String!
+  interval: Int
+  month: Int
+  dayOfMonth: Int
+  daysOfWeek: [String!]
+  firstDayOfWeek: String
+  index: String
+}
+
+input AzureCalendarRecurrenceRangeInput {
+  type: String!
+  startDate: String
+  endDate: String
+  numberOfOccurrences: Int
+  recurrenceTimeZone: String
+}
+
+input AzureCalendarPatternedRecurrenceInput {
+  pattern: AzureCalendarRecurrencePatternInput!
+  range: AzureCalendarRecurrenceRangeInput!
+}
+
+input AzureCalendarEventInput {
+  "Calendar to create the event in; ignored on update. Never sent in the body."
+  calendarId: String
+  subject: String
+  body: AzureCalendarEventBodyInput
+  start: AzureCalendarDateTimeTimeZoneInput
+  end: AzureCalendarDateTimeTimeZoneInput
+  location: AzureCalendarLocationInput
+  locations: [AzureCalendarLocationInput!]
+  attendees: [AzureCalendarAttendeeInput!]
+  isAllDay: Boolean
+  "When true, Graph creates the meeting and returns onlineMeeting.joinUrl."
+  isOnlineMeeting: Boolean
+  "Defaults to teamsForBusiness when isOnlineMeeting is true."
+  onlineMeetingProvider: String
+  "patternedRecurrence - never a list of RFC 5545 strings."
+  recurrence: AzureCalendarPatternedRecurrenceInput
+  categories: [String!]
+  importance: String
+  sensitivity: String
+  showAs: String
+  reminderMinutesBeforeStart: Int
+  isReminderOn: Boolean
+  transactionId: String
+}
+
+input AzureCalendarEventBodyInput {
+  contentType: String
+  content: String
+}
+
+input AzureCalendarLocationConstraintInput {
+  isRequired: Boolean
+  suggestLocation: Boolean
+  locations: [AzureCalendarLocationInput!]
+}
+
+enum AzureCalendarInvitationResponse {
+  accept
+  decline
+  tentativelyAccept
+}
+
 extend type Query {
-  _azureCalendarPlaceholder: Boolean
+  "The user's calendars (cached for 5 minutes; pass refresh to bypass)."
+  azureCalendars(refresh: Boolean, top: Int, select: [String!]): [AzureCalendar!]!
+  """
+  Events without a date window. This field takes no start/end arguments on
+  purpose: a ranged read must use `azureCalendarView`, because `/me/events`
+  returns recurrence masters rather than the occurrences that fall inside a
+  window. `calendarId` narrows the read to one calendar (unwindowed).
+  """
+  azureCalendarEvents(calendarId: String, filter: String, orderBy: String, select: [String!], top: Int, skip: Int): [AzureCalendarEvent!]!
+  "The window read: /me/calendarView. Expands recurrences; prefer it for any range."
+  azureCalendarView(start: AzureCalendarDateTimeTimeZoneInput!, end: AzureCalendarDateTimeTimeZoneInput!, calendarId: String, filter: String, orderBy: String, select: [String!], top: Int): [AzureCalendarEvent!]!
+  "One event, occurrence, exception or recurring master."
+  azureCalendarEvent(eventId: String!, select: [String!], expand: [String!]): AzureCalendarEvent
+  "Free/busy for one or more mailboxes (/me/calendar/getSchedule)."
+  azureCalendarSchedule(schedules: [String!]!, start: AzureCalendarDateTimeTimeZoneInput!, end: AzureCalendarDateTimeTimeZoneInput!, availabilityViewInterval: Int, timeZone: String): [AzureCalendarScheduleInformation!]!
+  "Graph's meeting-time suggestion engine (/me/findMeetingTimes)."
+  azureFindMeetingTimes(attendees: [AzureCalendarAttendeeInput!]!, start: AzureCalendarDateTimeTimeZoneInput!, end: AzureCalendarDateTimeTimeZoneInput!, meetingDuration: String, maxCandidates: Int, isOrganizerOptional: Boolean, returnSuggestionReasons: Boolean, minimumAttendeePercentage: Float, locationConstraint: AzureCalendarLocationConstraintInput): AzureCalendarMeetingTimesResult!
+}
+
+extend type Mutation {
+  azureCreateEvent(input: AzureCalendarEventInput!): AzureCalendarEvent
+  azureUpdateEvent(eventId: String!, input: AzureCalendarEventInput!): AzureCalendarEvent
+  azureDeleteEvent(eventId: String!): Boolean
+  "Cancel and notify attendees with an optional comment."
+  azureCancelEvent(eventId: String!, comment: String): Boolean
+  "Accept, decline or tentatively accept an invitation."
+  azureRespondToEvent(eventId: String!, response: AzureCalendarInvitationResponse!, comment: String, sendResponse: Boolean): Boolean
 }
