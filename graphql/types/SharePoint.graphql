@@ -1,8 +1,205 @@
-# SharePoint GraphQL surface - STUB created by AZ-01.
+# SharePoint sites, lists, list items, columns and site drives (AZ-15).
 #
-# TODO(AZ-15): AZ-15 replaces the placeholder field below with the real
-# queries and mutations. The file exists so AZ-15 never has to edit
-# graphql/types/index.ts, which is loaded eagerly and owned by AZ-01.
+# Thin projection of AzureSharePointService: the resolver performs no request
+# shaping, so every field maps 1:1 to a normalised type in
+# types/sharepoint.types.ts. `userId` is optional and defaults to the calling
+# user (self-or-admin, as in Contacts.graphql).
+#
+# TWO PROPERTIES OF THIS SURFACE ARE DELIBERATE
+#
+# 1. `expand=fields` on list-item reads has NO dollar prefix. `$expand=fields` is
+#    reported to be accepted and then return items WITHOUT their column data - a
+#    silent empty result, not an error. The service appends `expand=fields`; see
+#    AzureSharePointService#listItems and LIST_ITEMS_EXPAND_PARAM.
+#
+# 2. `AzureSharePointItem.fields` is keyed by the list's INTERNAL column names
+#    (`Title`, `Status`), not the display names a user sees (`Workflow Status`).
+#    SharePoint silently ignores an unknown key, so a write with a guessed name
+#    succeeds and stores nothing. Use `azureSharePointColumns` to map
+#    displayName -> name, and note that `azureCreateSharePointItem` rejects a key
+#    that is not in that column list with `SharePointUnknownColumn`.
+#
+# PERMISSIONS
+#   /sites, /sites/{id}                    Sites.Read.All (or .Selected)
+#   /sites/{id}/lists                      Sites.Read.All
+#   /sites/{id}/lists/{id}/items           Sites.Read.All  (site: Sites.ReadWrite.All)
+#   /sites/{id}/lists/{id}/columns         Sites.Read.All
+#   /sites/{id}/drive                      Files.Read.All (or .Selected)
+#
+# The session must also grant SharePoint access itself: Microsoft Graph exposes
+# SharePoint content only when the app registration carries the SharePoint
+# permission and the tenant has consented to it.
+
+type AzureSharePointSite {
+  id: ID!
+  "Last segment of the site URL, e.g. `marketing`."
+  name: String
+  displayName: String
+  webUrl: String
+  "Host of the site collection, e.g. `contoso.sharepoint.com`."
+  hostname: String
+  "True for the site collection root."
+  isRoot: Boolean
+  createdDateTime: String
+  lastModifiedDateTime: String
+}
+
+type AzureSharePointList {
+  id: ID!
+  "URL-safe name, e.g. `Documents`."
+  name: String
+  displayName: String
+  webUrl: String
+  "e.g. `documentLibrary`, `genericList`."
+  template: String
+  hidden: Boolean
+  contentTypeId: String
+}
+
+type AzureSharePointItemContentType {
+  id: String
+  name: String
+}
+
+"""
+One list item.
+
+`fields` is the column data keyed by the list's INTERNAL column names. It is an
+empty object only when Graph genuinely returned no `fields`; a read that fails
+raises an error and never yields an empty object.
+"""
+type AzureSharePointItem {
+  id: ID!
+  fields: JSON!
+  webUrl: String
+  createdDateTime: String
+  lastModifiedDateTime: String
+  contentType: AzureSharePointItemContentType
+}
+
+type AzureSharePointItemPage {
+  items: [AzureSharePointItem!]!
+  "Opaque @odata.nextLink cursor - absent on the last page. Pass it back as `options.nextLink`."
+  nextLink: String
+}
+
+"""
+A column definition - the display-name to internal-name map.
+
+`displayName` is the label a user sees; `name` is the key `fields` requires.
+"""
+type AzureSharePointColumn {
+  id: ID!
+  "The internal name - the key `fields` uses."
+  name: String!
+  displayName: String
+  description: String
+  required: Boolean
+  hidden: Boolean
+  readOnly: Boolean
+  enforceUniqueValues: Boolean
+  "The columnDefinition facet: text, number, choice, dateTime, ..."
+  columnType: String
+}
+
+"""
+A site's document library drive.
+
+The `id` is what AzureDriveService (AZ-08) addresses as /drives/{id}/..., so
+SharePoint documents join the same surface as OneDrive files.
+"""
+type AzureSharePointDrive {
+  id: ID!
+  name: String
+  driveType: String
+  webUrl: String
+  description: String
+}
+
+input AzureSharePointItemListOptions {
+  "Page size; defaults to 100."
+  top: Int
+  """
+  Continue from a previous AzureSharePointItemPage.nextLink. The URL is used
+  verbatim (it already carries expand=fields and the cursor), so every other
+  option is ignored for that page.
+  """
+  nextLink: String
+  "Drain every page (bounded by maxPages)."
+  all: Boolean
+  maxPages: Int
+}
+
+"""
+A list-item write payload: { fields: { ... } }.
+
+Keys MUST be internal column names from azureSharePointColumns. There is no
+top-level `id`: Graph owns the item id.
+"""
+input AzureSharePointItemInput {
+  fields: JSON!
+}
+
 extend type Query {
-  _azureSharePointPlaceholder: Boolean
+  "GET /sites?search={term} - the sites search parameter has no dollar prefix."
+  azureSites(userId: String, search: String): [AzureSharePointSite!]!
+  "GET /sites/root."
+  azureRootSite(userId: String): AzureSharePointSite!
+  "GET /sites/{hostname}:/{site-path} - the path is encoded per segment."
+  azureSiteByPath(userId: String, hostname: String!, sitePath: String!): AzureSharePointSite!
+  "GET /sites/{siteId}/lists - selects id,name,displayName,list,webUrl."
+  azureSharePointLists(userId: String, siteId: String!): [AzureSharePointList!]!
+  """
+  GET /sites/{siteId}/lists/{listId}/items?expand=fields.
+  The expand parameter is NON-dollar; $expand=fields returns no column data.
+  """
+  azureSharePointItems(
+    userId: String
+    siteId: String!
+    listId: String!
+    options: AzureSharePointItemListOptions
+  ): AzureSharePointItemPage!
+  "GET /sites/{siteId}/lists/{listId}/items/{itemId}?expand=fields."
+  azureSharePointItem(
+    userId: String
+    siteId: String!
+    listId: String!
+    itemId: String!
+  ): AzureSharePointItem!
+  "GET /sites/{siteId}/lists/{listId}/columns - display name to internal name."
+  azureSharePointColumns(
+    userId: String
+    siteId: String!
+    listId: String!
+  ): [AzureSharePointColumn!]!
+  "GET /sites/{siteId}/drive - the document library drive id for AZ-08."
+  azureSharePointDrive(userId: String, siteId: String!): AzureSharePointDrive!
+}
+
+extend type Mutation {
+  """
+  POST /sites/{siteId}/lists/{listId}/items with { fields }.
+  Rejects a field key that is not an internal column name on the list.
+  """
+  azureCreateSharePointItem(
+    userId: String
+    siteId: String!
+    listId: String!
+    input: AzureSharePointItemInput!
+  ): AzureSharePointItem!
+  "PATCH /sites/{siteId}/lists/{listId}/items/{itemId} with { fields }."
+  azureUpdateSharePointItem(
+    userId: String
+    siteId: String!
+    listId: String!
+    itemId: String!
+    input: AzureSharePointItemInput!
+  ): AzureSharePointItem!
+  "DELETE /sites/{siteId}/lists/{listId}/items/{itemId}."
+  azureDeleteSharePointItem(
+    userId: String
+    siteId: String!
+    listId: String!
+    itemId: String!
+  ): Boolean!
 }

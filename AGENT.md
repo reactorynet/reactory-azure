@@ -54,7 +54,7 @@ not fix it: it may not modify the host `package.json` and may not restart the se
 | 12 | `azure.AzureSyncService@1.0.0` | AZ-12 | stub — delta loops and sync state |
 | 13 | `azure.AzureSubscriptionService@1.0.0` | AZ-12 | stub — change-notification subscriptions and renewal |
 | 14 | `azure.AzureTeamsService@1.0.0` | AZ-14 | stub — chats, channels, messages, presence |
-| 15 | `azure.AzureSharePointService@1.0.0` | AZ-15 | stub — sites, lists, items, columns |
+| 15 | `azure.AzureSharePointService@1.0.0` | AZ-15 | implemented — sites (path/root/search), lists, items (`expand=fields`, no `$`), columns, site drive; createItem rejects non-internal field keys |
 | 16 | `azure.AzureBlobStorageService@1.0.0` | AZ-16 | implemented — Blob Storage v12 data plane: containers, blobs (listBlobs = one page, listAllBlobs follows the token), streams, SAS URLs |
 
 Every stub throws `ApiError('not implemented', { ticket })`. No method returns `[]`,
