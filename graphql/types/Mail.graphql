@@ -1,8 +1,128 @@
-# Mail GraphQL surface - STUB created by AZ-01.
+# Mail GraphQL surface (AZ-04).
 #
-# TODO(AZ-04): AZ-04 replaces the placeholder field below with the real
-# queries and mutations. The file exists so AZ-04 never has to edit
-# graphql/types/index.ts, which is loaded eagerly and owned by AZ-01.
+# Thin projection of AzureMailService: the resolver does no request shaping, so
+# every field here maps 1:1 to a normalised domain type from
+# types/mail.types.ts. `userId` is optional and defaults to the calling user.
+#
+# AUTHORIZATION: `userId` selects WHOSE mailbox is read, and the service
+# authenticates with that user's vaulted Microsoft token. It is therefore
+# self-or-admin: omit it to read your own mailbox; naming another user is
+# rejected with InsufficientPermissions unless the caller holds ADMIN. The
+# resolver enforces this - `@roles(['USER'])` alone would not, as it proves only
+# that the caller is a user, not that the mailbox is theirs.
+
+type AzureMailAddress {
+  name: String
+  address: String
+}
+
+type AzureMailBody {
+  contentType: String
+  content: String
+}
+
+type AzureMailAttachment {
+  id: ID
+  name: String
+  contentType: String
+  size: Int
+  isInline: Boolean
+  contentBytes: String
+  lastModifiedDateTime: String
+}
+
+type AzureMailMessage {
+  id: ID!
+  conversationId: String
+  subject: String
+  bodyPreview: String
+  "Always present: a message Graph returned without a body reads as empty text."
+  body: AzureMailBody!
+  from: AzureMailAddress
+  sender: AzureMailAddress
+  toRecipients: [AzureMailAddress!]
+  ccRecipients: [AzureMailAddress!]
+  bccRecipients: [AzureMailAddress!]
+  replyTo: [AzureMailAddress!]
+  receivedDateTime: String
+  sentDateTime: String
+  isRead: Boolean
+  isDraft: Boolean
+  hasAttachments: Boolean
+  importance: String
+  categories: [String!]
+  parentFolderId: String
+  webLink: String
+  "Present only when the read requested $expand=attachments."
+  attachments: [AzureMailAttachment!]
+}
+
+type AzureMailPage {
+  items: [AzureMailMessage!]!
+  "Opaque @odata.nextLink cursor - absent on the last page."
+  nextLink: String
+  "Present only when $count was sent."
+  count: Int
+}
+
+type AzureMailFolder {
+  id: ID!
+  displayName: String
+  parentFolderId: String
+  childFolderCount: Int!
+  unreadItemCount: Int!
+  totalItemCount: Int
+  wellKnownName: String
+}
+
+type AzureMailCategory {
+  id: ID
+  displayName: String!
+  color: String
+}
+
+"A single-page or all-pages read. See AzureMailService.listMessages for the $search rules."
+input AzureMailListOptions {
+  top: Int
+  filter: String
+  search: String
+  "Only honoured when explicitly set: $search + $orderby is unverified."
+  orderBy: String
+  select: String
+  skip: Int
+  expand: String
+  "Suppressed for an unverified search + default-order request."
+  count: Boolean
+  immutableIds: Boolean
+  all: Boolean
+  maxPages: Int
+}
+
+input AzureMailGetOptions {
+  select: String
+  "The only supported value is `attachments`."
+  expand: String
+  immutableIds: Boolean
+}
+
 extend type Query {
-  _azureMailPlaceholder: Boolean
+  azureMailMessages(userId: String, options: AzureMailListOptions): AzureMailPage!
+  azureMailMessage(userId: String, id: String!, options: AzureMailGetOptions): AzureMailMessage!
+  azureMailFolders(userId: String): [AzureMailFolder!]!
+  azureMailCategories(userId: String): [AzureMailCategory!]!
+  "A conversation is a filtered message listing; Graph exposes no thread resource."
+  azureMailConversation(
+    userId: String
+    conversationId: String!
+    options: AzureMailListOptions
+  ): AzureMailPage!
+}
+
+extend type Mutation {
+  "Replace the categories on one message. Returns the updated message."
+  azureSetMailCategories(
+    userId: String
+    messageId: String!
+    categories: [String!]!
+  ): AzureMailMessage!
 }
