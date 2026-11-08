@@ -2,15 +2,26 @@ import Reactory from '@reactorynet/reactory-core';
 import { InsufficientPermissions } from '@reactory/server-core/exceptions';
 import { roles } from '@reactory/server-core/authentication/decorators';
 import { resolver, query, mutation } from '@reactory/server-core/models/graphql/decorators/resolver';
-import type { IMailGetOptions, IMailListOptions } from '../../types/mail.types';
+import type {
+  IMailDraftPatch,
+  IMailGetOptions,
+  IMailListOptions,
+  IMailMessageInput,
+  IMailReplyInput,
+} from '../../types/mail.types';
 
 /**
- * GraphQL surface for mail reads (AZ-04).
+ * GraphQL surface for mail (AZ-04 reads, AZ-05 writes).
  *
  * Every field is a thin adapter over `azure.AzureMailService@1.0.0`: the resolver
  * resolves the caller and forwards the options. It performs no request shaping,
  * no caching and no error translation - the service owns all of that, and its
  * `ApiError` (with the Graph `code`) is what a client receives.
+ *
+ * The write fields are thin on purpose: `comment` is forwarded verbatim and no
+ * quoting is built here or in the service (Graph's `/reply`, `/replyAll` and
+ * `/forward` sub-paths own that). A resolved `Boolean!` therefore means "Graph
+ * accepted it" - never "we returned something truthy".
  *
  * ## Mailbox ownership (security)
  *
@@ -153,6 +164,165 @@ class MailResolver {
       resolveUserId(params, context),
       params?.messageId,
       params?.categories || [],
+    );
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Attachment reads (AZ-05)                                                */
+  /* ---------------------------------------------------------------------- */
+
+  /** `GET /me/messages/{id}/attachments` - metadata only. */
+  @roles(['USER'], 'args.context')
+  @query('azureMailAttachments')
+  async listAttachments(
+    _obj: any,
+    params: { userId?: string; messageId: string },
+    context: Reactory.Server.IReactoryContext,
+  ) {
+    return mailService(context).listAttachments(
+      resolveUserId(params, context),
+      params?.messageId,
+    );
+  }
+
+  /** `GET /me/messages/{id}/attachments/{attachmentId}` - metadata + contentBytes. */
+  @roles(['USER'], 'args.context')
+  @query('azureMailAttachment')
+  async getAttachment(
+    _obj: any,
+    params: { userId?: string; messageId: string; attachmentId: string },
+    context: Reactory.Server.IReactoryContext,
+  ) {
+    return mailService(context).getAttachment(
+      resolveUserId(params, context),
+      params?.messageId,
+      params?.attachmentId,
+    );
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Writes (AZ-05)                                                          */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * `POST /me/sendMail`.
+   *
+   * `saveToSentItems` is forwarded as supplied; omitting it keeps Graph's own
+   * default (`true`). A Graph failure rejects with the service's `ApiError`.
+   */
+  @roles(['USER'], 'args.context')
+  @mutation('azureSendMail')
+  async sendMail(
+    _obj: any,
+    params: { userId?: string; message: IMailMessageInput; saveToSentItems?: boolean },
+    context: Reactory.Server.IReactoryContext,
+  ) {
+    return mailService(context).sendMessage(
+      resolveUserId(params, context),
+      params?.message,
+      { saveToSentItems: params?.saveToSentItems },
+    );
+  }
+
+  /** `POST /me/messages/{id}/reply`. */
+  @roles(['USER'], 'args.context')
+  @mutation('azureReplyMail')
+  async replyMail(
+    _obj: any,
+    params: { userId?: string; messageId: string; input?: IMailReplyInput },
+    context: Reactory.Server.IReactoryContext,
+  ) {
+    return mailService(context).replyToMessage(
+      resolveUserId(params, context),
+      params?.messageId,
+      params?.input || {},
+    );
+  }
+
+  /** `POST /me/messages/{id}/replyAll`. */
+  @roles(['USER'], 'args.context')
+  @mutation('azureReplyAllMail')
+  async replyAllMail(
+    _obj: any,
+    params: { userId?: string; messageId: string; input?: IMailReplyInput },
+    context: Reactory.Server.IReactoryContext,
+  ) {
+    return mailService(context).replyAll(
+      resolveUserId(params, context),
+      params?.messageId,
+      params?.input || {},
+    );
+  }
+
+  /** `POST /me/messages/{id}/forward`. */
+  @roles(['USER'], 'args.context')
+  @mutation('azureForwardMail')
+  async forwardMail(
+    _obj: any,
+    params: { userId?: string; messageId: string; input?: IMailReplyInput },
+    context: Reactory.Server.IReactoryContext,
+  ) {
+    return mailService(context).forwardMessage(
+      resolveUserId(params, context),
+      params?.messageId,
+      params?.input || {},
+    );
+  }
+
+  /** `POST /me/messages` - create a draft. */
+  @roles(['USER'], 'args.context')
+  @mutation('azureCreateMailDraft')
+  async createMailDraft(
+    _obj: any,
+    params: { userId?: string; message: IMailMessageInput },
+    context: Reactory.Server.IReactoryContext,
+  ) {
+    return mailService(context).createDraft(
+      resolveUserId(params, context),
+      params?.message,
+    );
+  }
+
+  /** `PATCH /me/messages/{id}` - update a draft. */
+  @roles(['USER'], 'args.context')
+  @mutation('azureUpdateMailDraft')
+  async updateMailDraft(
+    _obj: any,
+    params: { userId?: string; messageId: string; patch: IMailDraftPatch },
+    context: Reactory.Server.IReactoryContext,
+  ) {
+    return mailService(context).updateDraft(
+      resolveUserId(params, context),
+      params?.messageId,
+      params?.patch,
+    );
+  }
+
+  /** `POST /me/messages/{id}/send` - send an existing draft. */
+  @roles(['USER'], 'args.context')
+  @mutation('azureSendMailDraft')
+  async sendMailDraft(
+    _obj: any,
+    params: { userId?: string; messageId: string },
+    context: Reactory.Server.IReactoryContext,
+  ) {
+    return mailService(context).sendDraft(
+      resolveUserId(params, context),
+      params?.messageId,
+    );
+  }
+
+  /** `DELETE /me/messages/{id}` - delete a draft. */
+  @roles(['USER'], 'args.context')
+  @mutation('azureDeleteMailDraft')
+  async deleteMailDraft(
+    _obj: any,
+    params: { userId?: string; messageId: string },
+    context: Reactory.Server.IReactoryContext,
+  ) {
+    return mailService(context).deleteDraft(
+      resolveUserId(params, context),
+      params?.messageId,
     );
   }
 }

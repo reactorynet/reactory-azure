@@ -126,3 +126,110 @@ extend type Mutation {
     categories: [String!]!
   ): AzureMailMessage!
 }
+
+# ---------------------------------------------------------------------------
+# Write surface (AZ-05)
+# ---------------------------------------------------------------------------
+# Every mutation below fails loudly: a Graph failure rejects with the Graph
+# `code`, and no send resolves a placeholder object. `userId` keeps the AZ-04
+# self-or-admin rule - it defaults to the caller and another user requires ADMIN.
+#
+# Reply/forward take only a `comment`. The service targets Graph's
+# `/reply`, `/replyAll` and `/forward` sub-paths, which quote the original
+# message themselves; no quoting is generated in this module.
+
+input AzureMailRecipientInput {
+  name: String
+  address: String!
+}
+
+input AzureMailBodyInput {
+  "Text or HTML. Either casing is accepted; the service emits the documented spelling."
+  contentType: String!
+  content: String!
+}
+
+input AzureMailAttachmentInput {
+  name: String!
+  contentType: String
+  "Base64 payload. Above Graph's 3 MB simple-upload ceiling the service switches to a resumable upload session."
+  contentBytes: String!
+  isInline: Boolean
+}
+
+input AzureMailMessageInput {
+  subject: String
+  body: AzureMailBodyInput!
+  toRecipients: [AzureMailRecipientInput!]
+  ccRecipients: [AzureMailRecipientInput!]
+  bccRecipients: [AzureMailRecipientInput!]
+  replyTo: [AzureMailRecipientInput!]
+  attachments: [AzureMailAttachmentInput!]
+  importance: String
+}
+
+"A partial draft update. Only supplied properties are sent; an empty patch is rejected."
+input AzureMailDraftPatch {
+  subject: String
+  body: AzureMailBodyInput
+  toRecipients: [AzureMailRecipientInput!]
+  ccRecipients: [AzureMailRecipientInput!]
+  bccRecipients: [AzureMailRecipientInput!]
+  replyTo: [AzureMailRecipientInput!]
+  importance: String
+  attachments: [AzureMailAttachmentInput!]
+}
+
+input AzureMailReplyInput {
+  comment: String
+  "Valid on forward only: Graph's reply actions address the original participants."
+  toRecipients: [AzureMailRecipientInput!]
+}
+
+extend type Query {
+  "Attachment metadata only - contentBytes is never requested for a listing."
+  azureMailAttachments(userId: String, messageId: String!): [AzureMailAttachment!]!
+  "One attachment including its base64 contentBytes."
+  azureMailAttachment(
+    userId: String
+    messageId: String!
+    attachmentId: String!
+  ): AzureMailAttachment!
+}
+
+extend type Mutation {
+  """
+  POST /me/sendMail. Rejects with the Graph code on failure - a failed send can
+  never resolve to a truthy non-boolean value.
+  """
+  azureSendMail(
+    userId: String
+    message: AzureMailMessageInput!
+    saveToSentItems: Boolean
+  ): Boolean!
+
+  "POST /me/messages/{id}/reply with an optional comment."
+  azureReplyMail(userId: String, messageId: String!, input: AzureMailReplyInput): Boolean!
+
+  "POST /me/messages/{id}/replyAll with an optional comment."
+  azureReplyAllMail(userId: String, messageId: String!, input: AzureMailReplyInput): Boolean!
+
+  "POST /me/messages/{id}/forward with an optional comment and recipients."
+  azureForwardMail(userId: String, messageId: String!, input: AzureMailReplyInput): Boolean!
+
+  "POST /me/messages - creates a draft. isDraft is deliberately not sent."
+  azureCreateMailDraft(userId: String, message: AzureMailMessageInput!): AzureMailMessage!
+
+  "PATCH /me/messages/{id} - updates a draft."
+  azureUpdateMailDraft(
+    userId: String
+    messageId: String!
+    patch: AzureMailDraftPatch!
+  ): AzureMailMessage!
+
+  "POST /me/messages/{id}/send - sends an existing draft."
+  azureSendMailDraft(userId: String, messageId: String!): Boolean!
+
+  "DELETE /me/messages/{id} - deletes a draft."
+  azureDeleteMailDraft(userId: String, messageId: String!): Boolean!
+}
