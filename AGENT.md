@@ -49,12 +49,13 @@ not fix it: it may not modify the host `package.json` and may not restart the se
 | 7 | `azure.AzureCalendarService@1.0.0` | AZ-07 | implemented — calendars (5 min cache), `calendarView` ranges, event CRUD, RSVP/cancel, `getSchedule`, `findMeetingTimes`, online meetings |
 | 8 | `azure.AzureDriveService@1.0.0` | AZ-08 | implemented — drives, paged children, encoded path/item addressing, redirect-safe download and thumbnail streams, simple/resumable upload, folder/move/copy(monitor)/delete/restore, sharing, versions |
 | 9 | `azure.AzureDocumentService@1.0.0` | AZ-09 | implemented — template copy with text substitution, `.docx` text extraction (headers/footnotes/text boxes may be lost), 2 MB-capped PDF conversion, whole-file replace; no body editing (no server-side API) |
-| 10 | `azure.AzureWorkbookService@1.0.0` | AZ-10 | stub — worksheets, ranges, tables, sessions |
+| 10 | `azure.AzureWorkbookService@1.0.0` | AZ-10 | implemented — worksheets (2 min cache), used/address ranges, values/formulas/numberFormat writes, append/clear, tables and rows; sessions always closed in a finally |
 | 11 | `azure.AzureContactsService@1.0.0` | AZ-11 | implemented — contacts CRUD + folders, people `$search` (nextLink-only paging), `/users` directory behind the User.Read* gate, photos (`null` only on ImageNotFound) |
 | 12 | `azure.AzureSyncService@1.0.0` | AZ-12 | implemented — messages/events/drive delta loops with `Prefer: IdType="ImmutableId"`, per-page added/updated/deleted batches, persisted `@odata.deltaLink`; a 410 `resyncRequired` performs and records exactly one full resync (never propagated) |
 | 13 | `azure.AzureSubscriptionService@1.0.0` | AZ-12 | implemented — create/resubscribe/renew/delete Graph subscriptions, per-subscription random AES-256-GCM-encrypted `clientState` with constant-time verification, renewal at 80% of the granted lifetime (no hardcoded TTL) |
-| 14 | `azure.AzureTeamsService@1.0.0` | AZ-14 | stub — chats, channels, messages, presence |
-| 15 | `azure.AzureSharePointService@1.0.0` | AZ-15 | stub — sites, lists, items, columns |
+| 13 | `azure.AzureSubscriptionService@1.0.0` | AZ-12 | stub — change-notification subscriptions and renewal |
+| 14 | `azure.AzureTeamsService@1.0.0` | AZ-14 | implemented — chats and chat messages, joined teams, channels and channel messages (every id fully percent-encoded), send chat/channel messages, uncached presence |
+| 15 | `azure.AzureSharePointService@1.0.0` | AZ-15 | implemented — sites (path/root/search), lists, items (`expand=fields`, no `$`), columns, site drive; createItem rejects non-internal field keys |
 | 16 | `azure.AzureBlobStorageService@1.0.0` | AZ-16 | implemented — Blob Storage v12 data plane: containers, blobs (listBlobs = one page, listAllBlobs follows the token), streams, SAS URLs |
 
 Every stub throws `ApiError('not implemented', { ticket })`. No method returns `[]`,
