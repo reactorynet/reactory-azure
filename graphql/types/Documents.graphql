@@ -1,8 +1,147 @@
-# Documents GraphQL surface - STUB created by AZ-01.
+# Documents GraphQL surface (AZ-09): Word documents over Microsoft Graph.
 #
-# TODO(AZ-09): AZ-09 replaces the placeholder field below with the real
-# queries and mutations. The file exists so AZ-09 never has to edit
-# graphql/types/index.ts, which is loaded eagerly and owned by AZ-01.
+# What is here is exactly what Graph can do: read a document's metadata, extract
+# its text, convert it to PDF (2 MB ceiling), create a document by copying a
+# template and substituting literal text, and replace a document's whole file.
+#
+# What is deliberately absent: any field that edits a document *body*. Microsoft
+# exposes no server-side Word body-editing API - the Office JS API needs an
+# Office Add-in running inside the document, and there is no Graph equivalent of
+# Google Docs batchUpdate (audit §7 G1). A `batchUpdate`-shaped field would be a
+# lie about the platform, so the schema has none.
+
+"""A user, group or application identity associated with a document."""
+type AzureDocumentIdentity {
+  id: String
+  displayName: String
+  email: String
+}
+
+"""
+Graph's metadata for a document.
+
+`size` is the value the PDF conversion ceiling is enforced against, so it is
+surfaced here rather than hidden inside the conversion call.
+"""
+type AzureDocumentMetadata {
+  itemId: String!
+  name: String
+  size: Float
+  mimeType: String
+  webUrl: String
+  createdDateTime: DateTime
+  lastModifiedDateTime: DateTime
+  createdBy: AzureDocumentIdentity
+  lastModifiedBy: AzureDocumentIdentity
+  "The containing folder, needed to address a same-name replacement."
+  parentId: String
+  "Lower-cased file extension, including the dot, or null when there is none."
+  extension: String
+  "True when the item is an OOXML .docx (the only format this module reads)."
+  isWordDocument: Boolean!
+  "True when Word -> PDF conversion is allowed: a .docx/.doc at or under 2 MB."
+  convertibleToPdf: Boolean!
+  "Microsoft Graph's documented conversion ceiling, in bytes (2 MB)."
+  pdfConversionLimitBytes: Float!
+}
+
+"""
+Extracted plain text, plus the limits of the extraction.
+
+`fidelity` is not decoration: headers and footers, footnotes and text boxes may
+be missing, so a caller must be able to say so beside the text it received.
+"""
+type AzureDocumentText {
+  itemId: String!
+  name: String
+  text: String!
+  "The extractor used, e.g. Node.js zlib + built-in WordprocessingML reader."
+  library: String!
+  fidelity: [String!]!
+  characters: Int!
+}
+
+"""A conversion target Microsoft Graph documents for `/content?format=`."""
+enum AzureDocumentConversionFormat {
+  PDF
+}
+
+"""
+A converted document.
+
+GraphQL has no binary scalar, so the bytes are base64. Buffering is safe here
+only because Graph caps conversion at 2 MB; and the service refuses an over-limit
+document before it issues any request, so a truncated PDF can never appear.
+"""
+type AzureDocumentConversion {
+  itemId: String!
+  format: AzureDocumentConversionFormat!
+  contentType: String
+  contentLength: Float
+  contentBase64: String!
+}
+
+"""
+The result of creating a document from a template.
+
+`mode` is always TEXT_SUBSTITUTION: the new document is a byte-for-byte copy of
+the template with literal tokens replaced. No structure was created, removed or
+reordered - Graph has no endpoint that could do that.
+"""
+type AzureDocumentTemplateResult {
+  itemId: String!
+  name: String
+  webUrl: String
+  size: Float
+  templateItemId: String!
+  mode: String!
+  "Tokens that were found in the document and replaced."
+  applied: [String!]!
+  "Tokens that were supplied but never found (often split across runs, or in a header)."
+  missing: [String!]!
+  "A plain-language statement of what this operation did and did not do."
+  note: String!
+}
+
+"""The result of replacing a document's entire file contents."""
+type AzureDocumentReplacementResult {
+  itemId: String!
+  name: String
+  webUrl: String
+  size: Float
+}
+
+"""One literal token replacement for `azureCreateDocumentFromTemplate`."""
+input AzureDocumentReplacementInput {
+  "The literal token, exactly as it appears in the document (e.g. `{{client_name}}`)."
+  token: String!
+  value: String!
+}
+
 extend type Query {
-  _azureDocumentsPlaceholder: Boolean
+  "Size, last editor, created time and webUrl for an item."
+  azureDocumentMetadata(itemId: String!, driveId: String): AzureDocumentMetadata!
+
+  "Download a .docx and extract its plain text (throws for a non-.docx item)."
+  azureDocumentText(itemId: String!, driveId: String): AzureDocumentText!
+
+  "Convert a Word document to PDF. Rejected above 2 MB without any request."
+  azureDocumentPdf(itemId: String!, driveId: String): AzureDocumentConversion!
+}
+
+extend type Mutation {
+  "Copy a .docx template and replace literal token text. Text substitution, not structural editing."
+  azureCreateDocumentFromTemplate(
+    templateItemId: String!
+    name: String!
+    replacements: [AzureDocumentReplacementInput!]!
+    driveId: String
+  ): AzureDocumentTemplateResult!
+
+  "Replace a document's entire contents with a supplied .docx (base64)."
+  azureReplaceDocument(
+    itemId: String!
+    contentBase64: String!
+    driveId: String
+  ): AzureDocumentReplacementResult!
 }

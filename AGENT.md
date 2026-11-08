@@ -48,7 +48,7 @@ not fix it: it may not modify the host `package.json` and may not restart the se
 | 6 | `azure.AzureTodoService@1.0.0` | AZ-06 | implemented — Microsoft To Do lists, tasks, checklist items over v1.0 `/me/todo`; no `assignedTo` (assignment is Planner) |
 | 7 | `azure.AzureCalendarService@1.0.0` | AZ-07 | implemented — calendars (5 min cache), `calendarView` ranges, event CRUD, RSVP/cancel, `getSchedule`, `findMeetingTimes`, online meetings |
 | 8 | `azure.AzureDriveService@1.0.0` | AZ-08 | implemented — drives, paged children, encoded path/item addressing, redirect-safe download and thumbnail streams, simple/resumable upload, folder/move/copy(monitor)/delete/restore, sharing, versions |
-| 9 | `azure.AzureDocumentService@1.0.0` | AZ-09 | stub — templates, text extraction, PDF conversion (2 MB cap) |
+| 9 | `azure.AzureDocumentService@1.0.0` | AZ-09 | implemented — template copy with text substitution, `.docx` text extraction (headers/footnotes/text boxes may be lost), 2 MB-capped PDF conversion, whole-file replace; no body editing (no server-side API) |
 | 10 | `azure.AzureWorkbookService@1.0.0` | AZ-10 | stub — worksheets, ranges, tables, sessions |
 | 11 | `azure.AzureContactsService@1.0.0` | AZ-11 | stub — contacts, folders, people search, directory |
 | 12 | `azure.AzureSyncService@1.0.0` | AZ-12 | stub — delta loops and sync state |
