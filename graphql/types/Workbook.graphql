@@ -1,8 +1,159 @@
-# Workbook GraphQL surface - STUB created by AZ-01.
+# Excel workbook GraphQL surface (AZ-10).
 #
-# TODO(AZ-10): AZ-10 replaces the placeholder field below with the real
-# queries and mutations. The file exists so AZ-10 never has to edit
-# graphql/types/index.ts, which is loaded eagerly and owned by AZ-01.
+# Everything here is served over Microsoft Graph **v1.0** paths, rooted at a
+# drive item:
+#   /me/drive/items/{itemId}/workbook/worksheets
+#   /me/drive/items/{itemId}/workbook/worksheets/{worksheet}/usedRange
+#   /me/drive/items/{itemId}/workbook/worksheets/{worksheet}/range(address='…')
+#   /me/drive/items/{itemId}/workbook/tables
+#   /me/drive/items/{itemId}/workbook/tables/{table}/rows/add
+#   /me/drive/items/{itemId}/workbook/createSession | closeSession
+#
+# Pass `driveId` to address a SharePoint document library instead of the
+# signed-in user's OneDrive.
+#
+# ---------------------------------------------------------------------------
+# VALUES ARE `Any` AND ARE NEVER COERCED
+# ---------------------------------------------------------------------------
+# A range's `values` is a row-major matrix. Graph returns `null` for an empty
+# cell and a *string* such as `#DIV/0!` or `#VALUE!` for an error cell. Both are
+# passed through unchanged - no field here turns an error cell into `null`, and
+# no write pads or trims a row. For that reason the matrix is typed as `Any`
+# rather than `[String]`: a String matrix would silently stringify numbers and
+# lose the distinction between an empty cell and an error.
+#
+# A large matrix is not truncated in either direction: an input list is sent
+# whole, and a range read returns everything Graph returned.
+
+"""A worksheet in an Excel workbook (`/workbook/worksheets/{id}`)."""
+type AzureWorkbookWorksheet {
+  id: String!
+  name: String
+  """Zero-based position in the workbook."""
+  position: Int
+  """`Visible`, `Hidden` or `VeryHidden`."""
+  visibility: String
+}
+
+"""
+An Excel range.
+
+`values` is present only when the request asked for values (`valuesOnly: true`
+on `azureWorkbookRange`, or always for `azureUpdateWorkbookRange` /
+`azureAppendWorkbookRows`, which return the written range).
+
+Every cell is passed through exactly as Graph sent it: `null` for an empty cell,
+`'#DIV/0!'` for an error cell.
+"""
+type AzureWorkbookRange {
+  address: String!
+  addressLocal: String
+  cellCount: Int
+  columnCount: Int
+  columnIndex: Int
+  rowCount: Int
+  rowIndex: Int
+  """Row-major cell values. `null` is empty; `#DIV/0!` is an error - unchanged."""
+  values: Any
+  """Row-major display text."""
+  text: Any
+  """Row-major value types: `String`, `Double`, `Boolean`, `Error`, ..."""
+  valueTypes: Any
+  formulas: Any
+  numberFormat: Any
+}
+
+"""A table (`/workbook/tables/{id|name}`)."""
+type AzureWorkbookTable {
+  id: String!
+  name: String
+  displayName: String
+  showHeaders: Boolean
+  showTotals: Boolean
+  style: String
+  """The A1 address of the table body, headers excluded."""
+  tableRange: String
+}
+
+"""One table column (`/workbook/tables/{id}/columns/{id}`)."""
+type AzureWorkbookTableColumn {
+  id: String!
+  name: String
+  index: Int
+  values: Any
+}
+
+"""One table row (`/workbook/tables/{id}/rows/{index}`)."""
+type AzureWorkbookTableRow {
+  index: Int
+  values: Any
+}
+
+"""
+A range write.
+
+`values` is mandatory; `formulas` and `numberFormat` are optional and only sent
+when supplied. An error literal in `values` stays an error literal.
+"""
+input AzureWorkbookRangeInput {
+  """Row-major cell values. `null` is an empty cell; `#DIV/0!` is an error."""
+  values: Any!
+  formulas: Any
+  numberFormat: Any
+}
+
 extend type Query {
-  _azureWorkbookPlaceholder: Boolean
+  """Every worksheet in the workbook, cached for two minutes per user and item."""
+  azureWorkbookWorksheets(itemId: String!, driveId: String): [AzureWorkbookWorksheet!]!
+
+  """
+  The used range when `address` is omitted, otherwise the addressed range.
+
+  `valuesOnly` applies to the used-range form and asks Graph to include values
+  (default: address and counts only).
+  """
+  azureWorkbookRange(
+    itemId: String!
+    worksheet: String!
+    address: String
+    valuesOnly: Boolean
+    driveId: String
+  ): AzureWorkbookRange
+
+  """
+  Tables in the workbook, or in one worksheet when `worksheet` is supplied.
+
+  `worksheet` is optional because Graph can list `…/workbook/tables` directly.
+  """
+  azureWorkbookTables(itemId: String!, worksheet: String, driveId: String): [AzureWorkbookTable!]!
+}
+
+extend type Mutation {
+  """
+  PATCH a worksheet range with `{ values, formulas?, numberFormat? }`.
+
+  Set `useSession: true` to run the write inside a workbook session that is
+  closed even if the write throws.
+  """
+  azureUpdateWorkbookRange(
+    itemId: String!
+    worksheet: String!
+    address: String!
+    input: AzureWorkbookRangeInput!
+    useSession: Boolean
+    driveId: String
+  ): AzureWorkbookRange
+
+  """
+  Append rows below the worksheet's used range. Every supplied row is written in
+  one request - the matrix is never truncated. `useSession: true` keeps the
+  used-range read and the write in one session.
+  """
+  azureAppendWorkbookRows(
+    itemId: String!
+    worksheet: String!
+    values: Any!
+    useSession: Boolean
+    driveId: String
+  ): AzureWorkbookRange
 }
