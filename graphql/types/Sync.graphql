@@ -1,8 +1,102 @@
-# Sync GraphQL surface - STUB created by AZ-01.
+# Sync GraphQL surface (AZ-12).
 #
-# TODO(AZ-12): AZ-12 replaces the placeholder field below with the real
-# queries and mutations. The file exists so AZ-12 never has to edit
-# graphql/types/index.ts, which is loaded eagerly and owned by AZ-01.
+# Read the persisted delta cursor, run one delta pass, list change-notification
+# subscriptions, and renew them. The resolver is a thin adapter over
+# azure.AzureSyncService@1.0.0 / azure.AzureSubscriptionService@1.0.0; every
+# field maps 1:1 to a service method and the service owns Graph interaction,
+# delta-token expiry and the 80%-of-granted renewal arithmetic.
+#
+# AUTHORIZATION: every field is the caller's own data - no `userId` argument is
+# exposed, so there is no IDOR surface to guard. Queue processors and internal
+# callers pass an explicit user id to the services directly.
+
+type AzureSyncState {
+  userId: String!
+  "messages | events | drive"
+  resource: String!
+  "Opaque @odata.deltaLink from the last completed pass."
+  deltaLink: String
+  lastSyncedAt: DateTime
+  "Diagnostics: id of the last item the loop processed."
+  cursor: String
+  "idle | syncing | synced | resync | error"
+  status: String!
+  lastError: String
+  "Number of 410-triggered full resyncs recorded for this cursor."
+  fullResyncCount: Int!
+  lastFullResyncAt: DateTime
+  "True when the most recent completed pass was a full resync."
+  lastSyncWasFullResync: Boolean!
+}
+
+type AzureSyncBatch {
+  page: Int!
+  added: Int!
+  updated: Int!
+  deleted: Int!
+  deltaLink: String
+}
+
+type AzureSyncResult {
+  userId: String!
+  resource: String!
+  pages: Int!
+  added: Int!
+  updated: Int!
+  deleted: Int!
+  "The deltaLink persisted for the next pass."
+  deltaLink: String
+  "True when a 410 forced this pass to rebuild state."
+  fullResync: Boolean!
+  status: String!
+  cursor: String
+  "Per-page counts, in the order Graph returned them."
+  batches: [AzureSyncBatch!]!
+}
+
+type AzureSubscription {
+  userId: String!
+  subscriptionId: String!
+  resource: String!
+  "The Graph resource path the subscription targets."
+  graphResource: String
+  changeType: [String!]!
+  notificationUrl: String!
+  "The expiry Graph granted (never the one requested)."
+  expirationDateTime: DateTime!
+  renewedAt: DateTime
+  "80% of the granted lifetime."
+  nextRenewAt: DateTime
+  active: Boolean!
+}
+
+type AzureSubscriptionRenewal {
+  userId: String!
+  subscriptionId: String!
+  expirationDateTime: DateTime!
+  "Lifetime Graph granted, in milliseconds, measured from the request time."
+  grantedLifetimeMs: Float!
+  "When the next renewal should run (80% of the granted lifetime)."
+  renewalTime: DateTime!
+  "Alias of renewalTime, matching the stored AzureSubscription field."
+  nextRenewAt: DateTime!
+}
+
 extend type Query {
-  _azureSyncPlaceholder: Boolean
+  "Persisted delta state for one resource, or null when the user has never synced it."
+  azureSyncState(resource: String!): AzureSyncState
+  "Every change-notification subscription stored for the calling user."
+  azureSubscriptions: [AzureSubscription!]!
+}
+
+extend type Mutation {
+  "Run one delta pass for the calling user (messages | events | drive)."
+  azureSync(resource: String!): AzureSyncResult!
+  """
+  Renew the calling user's subscriptions that are DUE (nextRenewAt <= now, i.e.
+  80% of the granted lifetime has elapsed). Pass `force: true` to renew every
+  active subscription regardless of its schedule. Each result reports the
+  lifetime Graph actually granted.
+  """
+  azureRenewSubscriptions(force: Boolean): [AzureSubscriptionRenewal!]!
 }
