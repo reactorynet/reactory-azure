@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/*.tgz
+
+# Test and coverage artefacts
+coverage/
+*.lcov
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# AI run artefacts (written by core.ProcessAITicket)
+.ai-agent/
+
+# Editor / OS noise
+.DS_Store
+*.log
