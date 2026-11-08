@@ -44,7 +44,7 @@ not fix it: it may not modify the host `package.json` and may not restart the se
 | 2 | `azure.AzureAuthService@1.0.0` | AZ-01 | implemented — PKCE URL, callback exchange, token vault, refresh, legacy bridge, profile |
 | 3 | `azure.AzureGraphClientProvider@1.0.0` | AZ-01 | implemented — the only Graph `Client` factory: retry, pagination, delta, batch |
 | 4 | `azure.AzureService@1.0.0` | AZ-01 | implemented — facade exposing every other service plus connection status/disconnect |
-| 5 | `azure.AzureMailService@1.0.0` | AZ-04 | stub — mail read, folders, categories, `$search` |
+| 5 | `azure.AzureMailService@1.0.0` | AZ-04 | implemented — paged/searchable messages, folders (Redis-cached), categories, conversations |
 | 6 | `azure.AzureTodoService@1.0.0` | AZ-06 | stub — Microsoft To Do lists, tasks, checklist items |
 | 7 | `azure.AzureCalendarService@1.0.0` | AZ-07 | stub — calendars, `calendarView`, event CRUD, availability |
 | 8 | `azure.AzureDriveService@1.0.0` | AZ-08 | stub — drives, children, download/upload, sharing |
