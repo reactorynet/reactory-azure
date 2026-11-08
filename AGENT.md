@@ -47,7 +47,7 @@ not fix it: it may not modify the host `package.json` and may not restart the se
 | 5 | `azure.AzureMailService@1.0.0` | AZ-04 | stub — mail read, folders, categories, `$search` |
 | 6 | `azure.AzureTodoService@1.0.0` | AZ-06 | stub — Microsoft To Do lists, tasks, checklist items |
 | 7 | `azure.AzureCalendarService@1.0.0` | AZ-07 | stub — calendars, `calendarView`, event CRUD, availability |
-| 8 | `azure.AzureDriveService@1.0.0` | AZ-08 | stub — drives, children, download/upload, sharing |
+| 8 | `azure.AzureDriveService@1.0.0` | AZ-08 | implemented — drives, paged children, encoded path/item addressing, redirect-safe download and thumbnail streams, simple/resumable upload, folder/move/copy(monitor)/delete/restore, sharing, versions |
 | 9 | `azure.AzureDocumentService@1.0.0` | AZ-09 | stub — templates, text extraction, PDF conversion (2 MB cap) |
 | 10 | `azure.AzureWorkbookService@1.0.0` | AZ-10 | stub — worksheets, ranges, tables, sessions |
 | 11 | `azure.AzureContactsService@1.0.0` | AZ-11 | stub — contacts, folders, people search, directory |
@@ -79,7 +79,7 @@ may edit that barrel.
 | Mail write | `/me/sendMail`, `/messages/{id}/reply`, drafts, attachments | AZ-05 | not started |
 | Tasks | `/me/todo/lists`, `/me/todo/lists/{id}/tasks`, `…/checklistItems` | AZ-06 | stub |
 | Calendar | `/me/calendars`, `/me/calendarView`, `/me/calendar/getSchedule`, `/me/findMeetingTimes` | AZ-07 | stub |
-| Files | `/me/drive`, `/items/{id}/children`, `/content`, upload sessions, permissions | AZ-08 | stub |
+| Files | `/me/drive`, `/items/{id}/children`, `/content`, upload sessions, permissions | AZ-08 | implemented |
 | Documents | `/items/{id}/content?format=pdf`, template copy | AZ-09 | stub |
 | Workbooks | `/workbook/worksheets`, `…/range`, `…/tables`, `createSession` | AZ-10 | stub |
 | Contacts / directory | `/me/contacts`, `/me/people`, `/users` | AZ-11 | stub |
@@ -103,6 +103,30 @@ mutation { azureDisconnect }
 resolvers exist as stubs that throw `not implemented`, so later tickets never edit
 `graphql/types/index.ts` or `graphql/resolvers/index.ts`.
 
+### Drive (AZ-08)
+
+```graphql
+query  { azureDrive { id name driveType quota { used remaining } } }
+query  { azureDriveItems(itemId: "…", top: 50) { nextLink items { id name kind mimeType isFolder childCount } } }
+query  { azureDriveItem(path: "Reports/a b#c?.txt") { id name webUrl } }
+query  { azureDriveSearch(query: "budget report") { items { id name } nextLink } }
+query  { azureDrivePermissions(itemId: "…") { id roles link { webUrl scope } } }
+query  { azureDriveVersions(itemId: "…") { id lastModifiedDateTime size } }
+
+mutation { azureCreateDriveFolder(name: "Reports", parentId: "…") { id name } }
+mutation { azureUploadDriveItem(parentId: "…", name: "a.pdf", contentBase64: "…") { id size } }
+mutation { azureMoveDriveItem(itemId: "…", parentId: "…", name: "renamed.pdf") { id } }
+mutation { azureCopyDriveItem(itemId: "…", parentId: "…") { status itemId monitorUrl } }
+mutation { azureDeleteDriveItem(itemId: "…") }
+mutation { azureShareDriveItem(itemId: "…", type: "view", scope: "organization") { id link { webUrl } } }
+```
+
+`azureDrives`, `azureRestoreDriveItem`, `azureRestoreDriveVersion`,
+`azureInviteDriveCollaborators` and `azureDeleteDrivePermission` complete the surface. There is
+deliberately **no** `downloadUrl` field: content and thumbnails are streamed by the HTTP proxy
+above so a pre-authenticated storage URL never reaches a client. `azureUploadDriveItem` takes
+base64 because GraphQL has no binary scalar.
+
 ## HTTP surface
 
 Mounted at `/azure` (`index.ts` → `routes: { '/azure': routes }`):
@@ -114,7 +138,8 @@ Mounted at `/azure` (`index.ts` → `routes: { '/azure': routes }`):
 | GET | `/azure/auth/status` | connection status for the caller |
 | POST | `/azure/auth/disconnect` | mark the vaulted token revoked |
 | POST | `/azure/webhooks/graph` | reserved for AZ-12 (empty router) |
-| GET | `/azure/files/:itemId` | reserved for AZ-08 (empty router) |
+| GET | `/azure/files/:itemId` | stream a file; sets `Content-Type` and `Content-Disposition`, never returns the pre-authenticated URL |
+| GET | `/azure/files/:itemId/thumbnail?size=small\|medium\|large` | stream a thumbnail rendition inline |
 
 ## Authentication and the token model
 
@@ -266,7 +291,16 @@ node …/run-worktree-tests.js --module-root <worktree> __tests__ \
 
 Current line/branch figures for the implemented files: `AzureAuthService` 99.11/85.80,
 `AzureService` 100/85.71, `AzureAuditService` 100/85.29, `services/graph.ts` 97.05/90.62,
-`AzureGraphClientProvider` 96.07/88.88, `routes/auth.ts` 100/82.60.
+`AzureGraphClientProvider` 96.07/88.88, `routes/auth.ts` 100/82.60, `AzureDriveService`
+100/84.61, `routes/proxy.ts` 97.50/86.53, `DriveResolver` 100/100 (measured over the two drive
+suites; the 80% branch floor applies per file, not per module).
+
+`DriveResolver` declares its own `DriveResolverContext` interface instead of annotating
+`Reactory.Server.IReactoryContext`. That is not cosmetic: `emitDecoratorMetadata` rewrites the
+ambient-namespace type into `typeof Reactory !== "undefined" && Reactory.Server` in
+`design:paramtypes`, a guard that is always false at runtime (`Reactory` is a type-only global),
+so istanbul reports two unreachable branches on each of the seventeen decorated methods. An
+interface emits `Object`, and no decorator here reads `design:paramtypes`.
 
 | Suite | Covers |
 |---|---|
@@ -278,8 +312,12 @@ Current line/branch figures for the implemented files: `AzureAuthService` 99.11/
 | `__tests__/facade.test.ts` | every `AzureService` getter (bound property and context paths), `getConnectionStatus`/`disconnectAccount` including the no-auth-service fallbacks |
 | `__tests__/graph-shim.test.ts` | the shim's success shapes: `getUserDetails` raw `/me` + `avatar` only when `profileImage`, `getProfileImage`, `getEmails` search, `sendEmail` body, and the three beta task methods |
 | `__tests__/routes-auth.test.ts` | `/azure/auth/url|callback|status|disconnect`: success, 401/503/500, redirect defaults, missing params |
+| `__tests__/drive-service.test.ts` (84) | `downloadItem` two-hop redirect with no `Authorization` on the storage host, 404 `itemNotFound` → `ApiError`, copy monitor (completed/inProgress/302/failure/drain), upload-session 202 and unreadable-body fallbacks, every `toNodeStream` body shape, error-body parsing and its 1 MiB cap, item scrubbing (including a null thumbnail set), `/azure/files` proxy headers, 401/404/500/502/503, stream error before/after headers, client disconnect, all resolver mutations and identity unwrapping |
+| `__tests__/drive.request-shape.test.ts` (40) | segment/query encoding (`a b#c?.txt`, search quoting), item/parent/drive paths, write bodies, simple upload at 4 MiB, resumable fragments at 320 KiB multiples with no bearer token, 416 resume, thumbnail path, and the **production `fetch` transport** (`redirect: 'manual'`, header normalisation, typed no-fetch failure) |
 
-All tests mock the Graph layer: **no live Graph call is made** in this repository.
+All tests mock the Graph layer: **no live Graph call is made** in this repository. The drive
+suites replace the byte transport via `setDriveHttpClient` and mock the SDK, so the redirect and
+fragment assertions run without a tenant or a network.
 
 ## File ownership
 
