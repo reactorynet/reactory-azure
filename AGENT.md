@@ -44,7 +44,7 @@ not fix it: it may not modify the host `package.json` and may not restart the se
 | 2 | `azure.AzureAuthService@1.0.0` | AZ-01 | implemented — PKCE URL, callback exchange, token vault, refresh, legacy bridge, profile |
 | 3 | `azure.AzureGraphClientProvider@1.0.0` | AZ-01 | implemented — the only Graph `Client` factory: retry, pagination, delta, batch |
 | 4 | `azure.AzureService@1.0.0` | AZ-01 | implemented — facade exposing every other service plus connection status/disconnect |
-| 5 | `azure.AzureMailService@1.0.0` | AZ-04 | implemented — paged/searchable messages, folders (Redis-cached), categories, conversations |
+| 5 | `azure.AzureMailService@1.0.0` | AZ-04, AZ-05 | implemented — paged/searchable messages, folders (Redis-cached), categories, conversations; send/reply/forward, drafts, inline and resumable attachments |
 | 6 | `azure.AzureTodoService@1.0.0` | AZ-06 | implemented — Microsoft To Do lists, tasks, checklist items over v1.0 `/me/todo`; no `assignedTo` (assignment is Planner) |
 | 7 | `azure.AzureCalendarService@1.0.0` | AZ-07 | implemented — calendars (5 min cache), `calendarView` ranges, event CRUD, RSVP/cancel, `getSchedule`, `findMeetingTimes`, online meetings |
 | 8 | `azure.AzureDriveService@1.0.0` | AZ-08 | implemented — drives, paged children, encoded path/item addressing, redirect-safe download and thumbnail streams, simple/resumable upload, folder/move/copy(monitor)/delete/restore, sharing, versions |
