@@ -1,8 +1,218 @@
-# Contacts GraphQL surface - STUB created by AZ-01.
+# Contacts, contact folders, people search and organisation directory (AZ-11).
 #
-# TODO(AZ-11): AZ-11 replaces the placeholder field below with the real
-# queries and mutations. The file exists so AZ-11 never has to edit
-# graphql/types/index.ts, which is loaded eagerly and owned by AZ-01.
+# Thin projection of AzureContactsService: the resolver does no request shaping,
+# so every field here maps 1:1 to a normalised domain type from
+# types/contacts.types.ts. `userId` is optional and defaults to the calling user.
+#
+# AUTHORIZATION: `userId` selects WHOSE Microsoft Graph credential is used, and
+# the service authenticates with that user's vaulted token. It is therefore
+# self-or-admin: omit it to read your own data; naming another user is rejected
+# with InsufficientPermissions unless the caller holds ADMIN. `@roles(['USER'])`
+# alone would not enforce that, as it proves only that the caller is a user.
+#
+# PERMISSIONS
+#   /me/contacts, /me/contactFolders  Contacts.Read / Contacts.ReadWrite
+#   /me/people                        People.Read
+#   /users                            User.ReadBasic.All or User.Read.All
+#
+# `User.ReadBasic.All` returns the BASIC profile of every tenant user
+# (displayName, givenName, surname, mail, userPrincipalName, photo).
+# `User.Read.All` returns the FULL profile and adds jobTitle, department,
+# officeLocation, businessPhones and mobilePhone; it is privileged and normally
+# requires admin consent. `azureDirectoryUsers` defaults to the basic projection;
+# pass the extended `select` only when the grant is User.Read.All.
+
+type AzureContactEmailAddress {
+  name: String
+  address: String
+}
+
+type AzureContact {
+  id: ID!
+  displayName: String
+  givenName: String
+  surname: String
+  emailAddresses: [AzureContactEmailAddress!]!
+  businessPhones: [String!]!
+  mobilePhone: String
+  companyName: String
+  jobTitle: String
+  department: String
+  officeLocation: String
+  parentFolderId: String
+}
+
+type AzureContactFolder {
+  id: ID!
+  displayName: String
+  parentFolderId: String
+  "Set for Graph's well-known folders (e.g. `contacts`)."
+  wellKnownName: String
+}
+
+type AzureContactPage {
+  items: [AzureContact!]!
+  "Opaque @odata.nextLink cursor - absent on the last page."
+  nextLink: String
+  "Present only when $count was sent."
+  count: Int
+}
+
+type AzurePersonScoredEmailAddress {
+  name: String
+  address: String
+  relevanceScore: Float
+}
+
+type AzurePerson {
+  id: ID!
+  displayName: String!
+  givenName: String
+  surname: String
+  companyName: String
+  jobTitle: String
+  department: String
+  "Graph's personType subclass (organizationUser, person, group, unknown)."
+  personType: String
+  emailAddresses: [AzureContactEmailAddress!]!
+  scoredEmailAddresses: [AzurePersonScoredEmailAddress!]!
+}
+
+type AzurePeoplePage {
+  items: [AzurePerson!]!
+  "Opaque @odata.nextLink cursor. Pass it back as `options.nextLink` to page."
+  nextLink: String
+}
+
+type AzureDirectoryUser {
+  id: ID!
+  displayName: String
+  givenName: String
+  surname: String
+  mail: String
+  userPrincipalName: String
+  "Requires User.Read.All; null under the basic grant."
+  jobTitle: String
+  "Requires User.Read.All; null under the basic grant."
+  department: String
+  "Requires User.Read.All; null under the basic grant."
+  officeLocation: String
+  businessPhones: [String!]!
+  "Requires User.Read.All; null under the basic grant."
+  mobilePhone: String
+  "Requires User.Read.All; null under the basic grant."
+  accountEnabled: Boolean
+}
+
+type AzureDirectoryUserPage {
+  items: [AzureDirectoryUser!]!
+  nextLink: String
+  count: Int
+}
+
+input AzureContactEmailAddressInput {
+  name: String
+  address: String
+}
+
+"Only these properties are forwarded to Graph; at least one must be supplied."
+input AzureContactInput {
+  displayName: String
+  givenName: String
+  surname: String
+  emailAddresses: [AzureContactEmailAddressInput!]
+  businessPhones: [String!]
+  homePhones: [String!]
+  mobilePhone: String
+  companyName: String
+  jobTitle: String
+  department: String
+  officeLocation: String
+  personalNotes: String
+  categories: [String!]
+}
+
+"A single-page or all-pages read. $skip IS supported on /me/contacts."
+input AzureContactListOptions {
+  top: Int
+  skip: Int
+  """
+  Continue from a previous AzureContactPage.nextLink - the stable cursor. The URL
+  is used verbatim, so every other option is ignored for that page.
+  """
+  nextLink: String
+  filter: String
+  select: String
+  orderBy: String
+  "Not sent when `all` is set: an all-pages read returns items only."
+  count: Boolean
+  all: Boolean
+  maxPages: Int
+}
+
+"""
+People-search options. There is deliberately NO `skip`: /me/people rejects
+$skip alongside $search, so paging is done only by passing a previous page's
+`nextLink` back in `nextLink`.
+"""
+input AzurePeopleOptions {
+  top: Int
+  "Continue from a previous AzurePeoplePage.nextLink; the URL is used verbatim."
+  nextLink: String
+  select: String
+  all: Boolean
+  maxPages: Int
+}
+
+input AzureDirectoryUserListOptions {
+  top: Int
+  skip: Int
+  filter: String
+  "Defaults to the User.ReadBasic.All projection; the extended one needs User.Read.All."
+  select: String
+  orderBy: String
+  count: Boolean
+  all: Boolean
+  maxPages: Int
+}
+
 extend type Query {
-  _azureContactsPlaceholder: Boolean
+  "GET /me/contacts - one page, or every page when options.all is set."
+  azureContacts(userId: String, options: AzureContactListOptions): AzureContactPage!
+  "GET /me/contacts/{id}."
+  azureContact(userId: String, contactId: String!): AzureContact!
+  "GET /me/contactFolders."
+  azureContactFolders(userId: String): [AzureContactFolder!]!
+  "GET /me/contactFolders/{folderId}/contacts."
+  azureContactsInFolder(
+    userId: String
+    folderId: String!
+    options: AzureContactListOptions
+  ): AzureContactPage!
+  "GET /me/people?$search= - paging is nextLink-only; no $skip is sent."
+  azurePeople(userId: String, query: String!, options: AzurePeopleOptions): AzurePeoplePage!
+  "GET /users. Requires User.ReadBasic.All or User.Read.All."
+  azureDirectoryUsers(
+    userId: String
+    options: AzureDirectoryUserListOptions
+  ): AzureDirectoryUserPage!
+  """
+  GET /me/contacts/{id}/photo/$value as a data: URI.
+  Null ONLY when Graph answers ImageNotFound (the contact has no photo); every
+  other failure - including 401 - is raised as an error, never returned as null.
+  """
+  azureContactPhoto(userId: String, contactId: String!): String
+}
+
+extend type Mutation {
+  "POST /me/contacts. Requires Contacts.ReadWrite."
+  azureCreateContact(userId: String, input: AzureContactInput!): AzureContact!
+  "PATCH /me/contacts/{id}. Requires Contacts.ReadWrite."
+  azureUpdateContact(
+    userId: String
+    contactId: String!
+    input: AzureContactInput!
+  ): AzureContact!
+  "DELETE /me/contacts/{id}. Requires Contacts.ReadWrite."
+  azureDeleteContact(userId: String, contactId: String!): Boolean!
 }

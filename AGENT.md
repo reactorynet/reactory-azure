@@ -50,7 +50,7 @@ not fix it: it may not modify the host `package.json` and may not restart the se
 | 8 | `azure.AzureDriveService@1.0.0` | AZ-08 | implemented — drives, paged children, encoded path/item addressing, redirect-safe download and thumbnail streams, simple/resumable upload, folder/move/copy(monitor)/delete/restore, sharing, versions |
 | 9 | `azure.AzureDocumentService@1.0.0` | AZ-09 | stub — templates, text extraction, PDF conversion (2 MB cap) |
 | 10 | `azure.AzureWorkbookService@1.0.0` | AZ-10 | stub — worksheets, ranges, tables, sessions |
-| 11 | `azure.AzureContactsService@1.0.0` | AZ-11 | stub — contacts, folders, people search, directory |
+| 11 | `azure.AzureContactsService@1.0.0` | AZ-11 | implemented — contacts CRUD + folders, people `$search` (nextLink-only paging), `/users` directory behind the User.Read* gate, photos (`null` only on ImageNotFound) |
 | 12 | `azure.AzureSyncService@1.0.0` | AZ-12 | stub — delta loops and sync state |
 | 13 | `azure.AzureSubscriptionService@1.0.0` | AZ-12 | stub — change-notification subscriptions and renewal |
 | 14 | `azure.AzureTeamsService@1.0.0` | AZ-14 | stub — chats, channels, messages, presence |
