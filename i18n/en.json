@@ -1,0 +1,263 @@
+{
+  "azure": {
+    "forms": {
+      "accountConnection": {
+        "title": "Microsoft Account Connection",
+        "description": "Connect, inspect and disconnect your Microsoft Graph account",
+        "schemaTitle": "Microsoft Account",
+        "fields": {
+          "connectionStatus": "Connection Status",
+          "email": "Email Address",
+          "upn": "User Principal Name",
+          "tenantId": "Tenant ID",
+          "tokenSource": "Token Source",
+          "grantedScopes": "Granted Permissions",
+          "connectedAt": "Connected At",
+          "lastRefreshedAt": "Last Refreshed At",
+          "expiresAt": "Token Expires At",
+          "servicesToConnect": "Services To Authorise",
+          "authorizationUrl": "Authorisation URL"
+        },
+        "enum": {
+          "servicesToConnect": {
+            "mail": "Mail",
+            "calendar": "Calendar",
+            "drive": "OneDrive",
+            "workbook": "Excel Workbooks",
+            "contacts": "Contacts",
+            "tasks": "To Do"
+          }
+        },
+        "help": {
+          "servicesToConnect": "Choose the capabilities this connection must be granted. Reconnecting widens or narrows the grant to exactly this set.",
+          "authorizationUrl": "Minted when you request a connection. Open it to grant access; this form does not launch it for you."
+        },
+        "notification": {
+          "authorizationUrlReady": "A Microsoft sign-in URL has been created. Open it to grant the requested access."
+        }
+      },
+      "mailInbox": {
+        "title": "Mail Inbox",
+        "description": "Read, search and page through your Microsoft 365 mailbox",
+        "schemaTitle": "Mailbox",
+        "fields": {
+          "search": "Search",
+          "orderBy": "Order By",
+          "top": "Page Size",
+          "allPages": "Read Every Page",
+          "items": "Messages",
+          "nextLink": "Next Page Cursor",
+          "count": "Total Messages"
+        },
+        "placeholder": {
+          "search": "Search mail"
+        },
+        "columns": {
+          "subject": "Subject",
+          "bodyPreview": "Preview",
+          "importance": "Importance",
+          "receivedDateTime": "Received"
+        }
+      },
+      "mailCompose": {
+        "title": "Compose Message",
+        "description": "Compose and send a message through Microsoft Graph",
+        "schemaTitle": "New Message",
+        "fields": {
+          "to": "To",
+          "cc": "Cc",
+          "bcc": "Bcc",
+          "replyTo": "Reply To",
+          "subject": "Subject",
+          "body": "Message",
+          "contentType": "Message Format",
+          "importance": "Importance",
+          "saveToSentItems": "Save To Sent Items"
+        },
+        "enum": {
+          "contentType": {
+            "text": "Plain text",
+            "html": "HTML"
+          },
+          "importance": {
+            "low": "Low",
+            "normal": "Normal",
+            "high": "High"
+          }
+        },
+        "placeholder": {
+          "subject": "Add a subject"
+        }
+      },
+      "calendarView": {
+        "title": "Calendar",
+        "description": "Read a calendar window, expanding recurring events into occurrences",
+        "schemaTitle": "Calendar Window",
+        "fields": {
+          "calendarId": "Calendar",
+          "startDateTime": "From",
+          "startTimeZone": "From Time Zone",
+          "endDateTime": "To",
+          "endTimeZone": "To Time Zone",
+          "orderBy": "Order By",
+          "top": "Maximum Events",
+          "events": "Events"
+        },
+        "help": {
+          "timeZone": "A Windows or IANA zone name, for example South Africa Standard Time. A wall-clock time without a zone moves by the viewer's UTC offset."
+        },
+        "columns": {
+          "subject": "Subject",
+          "start": "Starts",
+          "end": "Ends",
+          "location": "Location",
+          "isAllDay": "All Day"
+        }
+      },
+      "calendarEvent": {
+        "title": "Calendar Event",
+        "description": "Create, update or delete a single calendar event",
+        "schemaTitle": "Event",
+        "fields": {
+          "eventId": "Event ID",
+          "subject": "Title",
+          "bodyContent": "Description",
+          "startDateTime": "Start",
+          "startTimeZone": "Start Time Zone",
+          "endDateTime": "End",
+          "endTimeZone": "End Time Zone",
+          "location": "Location",
+          "attendeeEmails": "Attendees",
+          "isAllDay": "All Day Event",
+          "isOnlineMeeting": "Online Meeting",
+          "showAs": "Show As",
+          "reminderMinutesBeforeStart": "Reminder (minutes before start)"
+        },
+        "enum": {
+          "showAs": {
+            "free": "Free",
+            "tentative": "Tentative",
+            "busy": "Busy",
+            "oof": "Out of office",
+            "workingElsewhere": "Working elsewhere"
+          }
+        },
+        "help": {
+          "timeZone": "A Windows or IANA zone name. The event is stored with this zone, so it does not shift when another viewer opens it."
+        }
+      },
+      "driveExplorer": {
+        "title": "Drive Explorer",
+        "description": "Browse, create folders in and clean up your OneDrive",
+        "schemaTitle": "Drive",
+        "fields": {
+          "driveId": "Drive",
+          "itemId": "Folder",
+          "orderBy": "Order By",
+          "top": "Page Size",
+          "newFolderName": "New Folder Name",
+          "selectedItemId": "Selected Item",
+          "items": "Items",
+          "nextLink": "Next Page Cursor",
+          "count": "Total Items"
+        },
+        "columns": {
+          "name": "Name",
+          "kind": "Kind",
+          "size": "Size (bytes)",
+          "lastModifiedDateTime": "Last Modified"
+        }
+      },
+      "workbookView": {
+        "title": "Workbook",
+        "description": "Read a workbook range and write values back into the sheet",
+        "schemaTitle": "Workbook",
+        "fields": {
+          "itemId": "Workbook Item",
+          "driveId": "Drive",
+          "worksheet": "Worksheet",
+          "address": "Range Address",
+          "valuesOnly": "Include Cell Values",
+          "values": "Row Values",
+          "row": "Row",
+          "useSession": "Keep A Workbook Session"
+        },
+        "placeholder": {
+          "worksheet": "Worksheet name"
+        },
+        "help": {
+          "address": "An A1-style address such as A1:D20. Leave it empty to read the worksheet's used range.",
+          "values": "One row per line. Cells are sent exactly as entered: leave a cell empty for a blank, and an error literal such as #DIV/0! stays an error."
+        }
+      },
+      "contactsManager": {
+        "title": "Contacts",
+        "description": "Read and manage your Microsoft 365 contacts",
+        "schemaTitle": "Contacts",
+        "fields": {
+          "contactId": "Contact",
+          "top": "Page Size",
+          "displayName": "Display Name",
+          "givenName": "First Name",
+          "surname": "Surname",
+          "email": "Email Address",
+          "mobilePhone": "Mobile Phone",
+          "companyName": "Company",
+          "jobTitle": "Job Title",
+          "department": "Department",
+          "officeLocation": "Office",
+          "items": "Contacts",
+          "nextLink": "Next Page Cursor",
+          "count": "Total Contacts"
+        },
+        "columns": {
+          "displayName": "Name",
+          "companyName": "Company",
+          "jobTitle": "Job Title",
+          "department": "Department"
+        }
+      },
+      "todoManager": {
+        "title": "To Do",
+        "description": "Work through your Microsoft To Do lists, tasks and checklist items",
+        "schemaTitle": "Task",
+        "fields": {
+          "listId": "Task List",
+          "taskId": "Task",
+          "title": "Title",
+          "notes": "Notes",
+          "importance": "Importance",
+          "status": "Status",
+          "dueDateTime": "Due",
+          "dueTimeZone": "Due Time Zone",
+          "includeCompleted": "Show Completed Tasks",
+          "top": "Page Size",
+          "items": "Tasks"
+        },
+        "enum": {
+          "importance": {
+            "low": "Low",
+            "normal": "Normal",
+            "high": "High"
+          },
+          "status": {
+            "notStarted": "Not started",
+            "inProgress": "In progress",
+            "completed": "Completed",
+            "waitingOnOthers": "Waiting on others",
+            "deferred": "Deferred"
+          }
+        },
+        "help": {
+          "dueTimeZone": "A Windows or IANA zone name. To Do stores the due date with this zone, so it does not slip by a UTC offset."
+        },
+        "columns": {
+          "title": "Title",
+          "status": "Status",
+          "importance": "Importance",
+          "dueDateTime": "Due"
+        }
+      }
+    }
+  }
+}
