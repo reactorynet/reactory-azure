@@ -19,22 +19,30 @@ SharePoint and delta sync — as Reactory services, GraphQL fields and Reactor m
 - **Module dependency**: `core.ReactoryServer@1.0.0`
 - **Base documentation**: `docs/audit.md` (defects), `docs/implementation-plan.md` (AZ-01…AZ-19)
 
-## Status after AZ-01
+## Status — after AZ-18 (documentation consolidation)
 
-AZ-01 replaces a non-executing stub with a walking skeleton: every barrel, service,
-resolver and stub file exists, the Graph client can actually be constructed and
-authenticated, `azureConnectionStatus` is wired end to end, and the module registers
-16 services and 2 models. Domain behaviour (mail bodies, calendar events, files,
-workbooks, …) arrives in the tickets listed in the services table.
+All nineteen tickets in `docs/implementation-plan.md` are complete: every deliverable is present in
+the module source, and AZ-18 (this documentation pass) is the last of them. The module registers
+**16 services**, **4 models**, **11 GraphQL type files / 11 resolvers**, **5 queues**,
+**9 forms** and **10 AI macros**.
 
-The module is **not active** until the owner restarts the express server — the running
-process loaded the old, empty service list at start-up.
+There are **zero stubs**: no service definition in this module is a placeholder and no
+resolver throws `not implemented`. Verified against `services/index.ts` — 16 exported
+definitions, 16 unique `azure.*@1.0.0` FQNs, all `implemented`. `__tests__/contract-shape.test.ts`
+asserts the count and the exact FQN set.
 
-**Pre-restart owner action (blocking):** `@microsoft/microsoft-graph-client` must be installed
-somewhere that resolves from `src/modules/reactory-azure` **before** that restart. It is absent
-today, and because `reactory-core` imports the retained shim eagerly the restart would fail at
-core module load with `MODULE_NOT_FOUND` — see "Runtime dependencies" below. This ticket could
-not fix it: it may not modify the host `package.json` and may not restart the server.
+**AZ-18 is documentation only.** `docs/implementation-plan.md` §5 ("Definition of done") is a
+**human sign-off gate** evaluated after all nineteen tickets merge. Closing AZ-18 does *not*
+mean the module is signed off, and it does not make the module live.
+
+The module is **not active** until the owner restarts the express server — the running process
+loaded an earlier registry at start-up. The runbook, including the restart requirement and the
+live smoke test, is `docs/operations.md`.
+
+Runtime dependencies resolve from the server root as of this pass (see "Runtime dependencies"
+below). Re-verify before a restart: `reactory-core` imports the retained shim eagerly, so a
+missing `@microsoft/microsoft-graph-client` would fail the restart at core module load with
+`MODULE_NOT_FOUND`, not merely leave the Azure module inert.
 
 ## Services (16 — one row per exported definition)
 
@@ -53,13 +61,13 @@ not fix it: it may not modify the host `package.json` and may not restart the se
 | 11 | `azure.AzureContactsService@1.0.0` | AZ-11 | implemented — contacts CRUD + folders, people `$search` (nextLink-only paging), `/users` directory behind the User.Read* gate, photos (`null` only on ImageNotFound) |
 | 12 | `azure.AzureSyncService@1.0.0` | AZ-12 | implemented — messages/events/drive delta loops with `Prefer: IdType="ImmutableId"`, per-page added/updated/deleted batches, persisted `@odata.deltaLink`; a 410 `resyncRequired` performs and records exactly one full resync (never propagated) |
 | 13 | `azure.AzureSubscriptionService@1.0.0` | AZ-12 | implemented — create/resubscribe/renew/delete Graph subscriptions, per-subscription random AES-256-GCM-encrypted `clientState` with constant-time verification, renewal at 80% of the granted lifetime (no hardcoded TTL) |
-| 13 | `azure.AzureSubscriptionService@1.0.0` | AZ-12 | stub — change-notification subscriptions and renewal |
 | 14 | `azure.AzureTeamsService@1.0.0` | AZ-14 | implemented — chats and chat messages, joined teams, channels and channel messages (every id fully percent-encoded), send chat/channel messages, uncached presence |
 | 15 | `azure.AzureSharePointService@1.0.0` | AZ-15 | implemented — sites (path/root/search), lists, items (`expand=fields`, no `$`), columns, site drive; createItem rejects non-internal field keys |
 | 16 | `azure.AzureBlobStorageService@1.0.0` | AZ-16 | implemented — Blob Storage v12 data plane: containers, blobs (listBlobs = one page, listAllBlobs follows the token), streams, SAS URLs |
 
-Every stub throws `ApiError('not implemented', { ticket })`. No method returns `[]`,
-`null` or any other placeholder on failure.
+**Zero stub rows.** All sixteen definitions are implemented; a failure is always an `ApiError`
+carrying the Graph code, never a placeholder `[]`, `null` or truthy non-result. The exact list and
+order above is `services/index.ts`; the FQN set is asserted by `__tests__/contract-shape.test.ts`.
 
 ## Models
 
@@ -67,30 +75,36 @@ Every stub throws `ApiError('not implemented', { ticket })`. No method returns `
 |---|---|---|
 | `azure_tokens` | `AzureToken` | `userId` (unique), `accessTokenEncrypted`, `refreshTokenEncrypted`, `accessTokenExpiry`, `grantedScopes[]`, `azureUserId` (oid), `tenantId` (tid), `upn`, `encryptionSalt`, `connectedAt`, `lastRefreshedAt?`, `revokedAt?` |
 | `azure_audit_logs` | `AzureAuditLog` | `userId`, `operation`, `resource`, `outcome`, `durationMs`, `graphCode?`, `correlationId?`, `metadata?` |
+| `azure_sync_states` | `AzureSyncState` | `userId`, `resource` (`messages` \| `events` \| `drive`), `deltaLink?`, `lastSyncedAt?`, `cursor?`, `status` (`idle` \| `syncing` \| `synced` \| `resync` \| `error`), `lastError?`, `fullResyncCount`, `lastFullResyncAt?`, `lastSyncWasFullResync`; one row per user and resource |
+| `azure_subscriptions` | `AzureSubscription` | `userId`, `subscriptionId` (unique), `resource`, `graphResource`, `changeType`, `notificationUrl`, `expirationDateTime`, `clientState` (encrypted), `clientStateSalt`, `renewedAt`, `nextRenewAt`, `active` |
 
-AZ-12 appends `AzureSyncState` and `AzureSubscription` to `models/index.ts`; no other ticket
-may edit that barrel.
+All four are exported from `models/index.ts` as `ModelDefinitions` (exactly 4 entries) and
+re-exported as named models. `AzureToken`, `AzureAuditLog` come from AZ-01; `AzureSyncState`
+and `AzureSubscription` were appended by AZ-12, the only permitted edit to that barrel.
 
 ## Microsoft Graph coverage
 
 | Capability | Endpoints | Ticket | State |
 |---|---|---|---|
 | Identity / profile | `/me`, `/me/photos/{size}/$value` | AZ-01 | implemented |
-| Mail read | `/me/messages`, `/me/mailFolders`, `/me/outlook/masterCategories` | AZ-04 | stub |
-| Mail write | `/me/sendMail`, `/messages/{id}/reply`, drafts, attachments | AZ-05 | not started |
-| Tasks | `/me/todo/lists`, `/me/todo/lists/{id}/tasks`, `…/checklistItems` | AZ-06 | implemented |
+| Mail read | `/me/messages`, `/me/mailFolders`, `/me/outlook/masterCategories` | AZ-04 | implemented |
+| Mail write | `/me/sendMail`, `/messages/{id}/reply`, drafts, attachments | AZ-04, AZ-05 | implemented |
+| Tasks | `/me/todo/lists`, `/me/todo/lists/{id}/tasks`, `…/checklistItems` | AZ-06 | implemented — v1.0 only |
 | Calendar | `/me/calendars`, `/me/calendarView`, `/me/calendar/getSchedule`, `/me/findMeetingTimes` | AZ-07 | implemented |
 | Files | `/me/drive`, `/items/{id}/children`, `/content`, upload sessions, permissions | AZ-08 | implemented |
-| Documents | `/items/{id}/content?format=pdf`, template copy | AZ-09 | stub |
-| Workbooks | `/workbook/worksheets`, `…/range`, `…/tables`, `createSession` | AZ-10 | stub |
-| Contacts / directory | `/me/contacts`, `/me/people`, `/users` | AZ-11 | stub |
-| Sync | `/me/messages/delta`, `/me/events/delta`, `/me/drive/root/delta`, `/subscriptions` | AZ-12 | stub |
-| Teams | `/me/chats`, `/teams/{id}/channels/{id}/messages`, `/communications/getPresencesByUserId` | AZ-14 | stub |
-| SharePoint | `/sites/{host}:/{path}`, `/sites/{id}/lists`, `/lists/{id}/items` | AZ-15 | stub |
-| Blob Storage | `BlobServiceClient` (no Graph) | AZ-16 | stub |
+| Documents | `/items/{id}/content?format=pdf`, template copy | AZ-09 | implemented — PDF capped at 2 MB |
+| Workbooks | `/workbook/worksheets`, `…/range`, `…/tables`, `createSession` | AZ-10 | implemented |
+| Contacts / directory | `/me/contacts`, `/me/people`, `/users` | AZ-11 | implemented |
+| Sync | `/me/messages/delta`, `/me/events/delta`, `/me/drive/root/delta`, `/subscriptions` | AZ-12 | implemented |
+| Teams | `/me/chats`, `/teams/{id}/channels/{id}/messages`, `/communications/getPresencesByUserId` | AZ-14 | implemented |
+| SharePoint | `/sites/{host}:/{path}`, `/sites/{id}/lists`, `/lists/{id}/items` | AZ-15 | implemented — `expand=fields` |
+| Blob Storage | `BlobServiceClient` (no Graph) | AZ-16 | implemented |
 
-`beta` appears in exactly one place: the legacy shim's `/me/outlook/tasks` block, which
-documents why AZ-06 replaces it. Everything new uses `v1.0`.
+The **only beta endpoint this module calls** is the legacy shim's `/me/outlook/tasks` surface
+(`services/graph.ts`, `LEGACY_TASKS_VERSION = 'beta'`, used by its four task methods), which
+documents why AZ-06 replaces it. Everything new uses `v1.0`. (The string `beta` also occurs once
+in a design note at `AzureDocumentService.ts:694`, which names the preview
+`documentProcessingJob` pipeline as a rejected extraction option — a comment, not a request.)
 
 ### Microsoft To Do (AZ-06)
 
@@ -114,17 +128,110 @@ surface can reach that path - it stopped returning data on 20 August 2022.
   operations and all five checklist operations) and `__tests__/todo-service.test.ts`
   (client-side selection, pagination, error contract, schema/resolver alignment).
 
-## GraphQL surface (AZ-01)
+## What this module cannot do — quoting `docs/audit.md` §7
 
-```graphql
-query  { azureConnectionStatus { status email upn tenantId grantedScopes tokenSource expiresAt } }
-mutation { azureAuthUrl(services: ["mail", "calendar"]) { url } }
-mutation { azureDisconnect }
-```
+These are permanent capability gaps, not defects and not backlog. They are recorded so an agent
+does not promise them. Every quotation below is from `docs/audit.md` §7, "Honest capability gaps —
+where Azure cannot match Google".
 
-`Auth.graphql` + `AuthResolver` are implemented. The other ten `.graphql` files and their
-resolvers exist as stubs that throw `not implemented`, so later tickets never edit
-`graphql/types/index.ts` or `graphql/resolvers/index.ts`.
+### No server-side Word body editing (G1)
+
+> **Microsoft has no equivalent.** The Word/Office JS API runs **in the browser as an Office
+> Add-in** and requires the document to be open in Word on the web or desktop.
+
+> **Consequence for the plan:** `AzureDocumentService` will deliver *create from template*,
+> *read text*, *convert to PDF* and *replace file*. It will **not** deliver addressable
+> paragraph editing. Achieving that requires either `docx`-library manipulation server-side
+> (slow, lossy for complex documents, no layout awareness) or an Office Add-in on the client.
+
+The delivered service is exactly that: template copy with text substitution, `.docx` text
+extraction, PDF conversion and whole-file replacement. There is no `batchUpdate` and no
+paragraph/range styling API.
+
+### PDF conversion is capped at 2 MB per file (G1)
+
+> **The conversion endpoint is capped at 2 MB per file** and only supports documented format
+> pairs. A Word document above 2 MB cannot be converted this way at all. The service must
+> check `size` and reject with a typed error naming the limit — never return a truncated or
+> empty stream.
+
+### To Do has no assignee; assignment lives in Planner (G2)
+
+> `reactory-google`'s `createTask` takes an `assignedTo`. The Azure equivalent must not pretend
+> the same parameter exists. To Do tasks have no assignee. Assignment is a **Planner** concern
+> (`/planner/tasks` with `assignments` keyed by user id), with a different object model and
+> different permission scopes.
+
+`AzureTodoService` rejects a payload carrying `assignedTo`, `assignee` or `assignments` with
+`UnsupportedTodoTaskAssignment` rather than dropping it. **This module does not implement a
+Planner service** — a caller that needs per-task assignment needs a new service and the Planner
+permission set.
+
+### Search is OData, not a Gmail query language (G3)
+
+> Gmail accepts a query language (`from:`, `has:attachment`, `newer_than:`). Graph accepts
+> OData `$filter`, plus `$search` with a narrower KQL-like grammar that varies per resource.
+> `$search` requires `ConsistencyLevel: eventual` and behaves differently per resource.
+
+> **Consequence:** the mail search API must expose Graph's real contract, not a Gmail-shaped one.
+> Do not name a parameter `query` and imply Gmail semantics.
+
+### `expand=fields` takes no dollar prefix (G3a)
+
+> SharePoint list items expand their column data through `expand=fields`, **without** the OData
+> dollar prefix ... sending the OData form is reported to return no `fields` rather than an
+> error, which is a silent empty result.
+
+`AzureSharePointService` sends `expand=fields`. Do not "correct" it to `$expand=fields`.
+
+### Threading, attachments and recurrence are not Google's models (G4, G5, G7)
+
+> Gmail has a first-class `thread` resource. Graph has `conversationId` on messages and no
+> thread endpoint. Reconstructing a thread means filtering by `conversationId`, which is not
+> guaranteed to be a complete conversation across folders. The plan exposes
+> `listByConversation`, not `getThread`.
+
+Graph's attachment model and calendar recurrence shapes also differ from Google's (§7 G5, G7),
+and subscription lifetimes are not uniform (§7 G6) — which is why renewal is derived from the
+lifetime Graph actually grants rather than from a constant. Large `.docx` extraction may lose
+headers, footnotes and text boxes; that is documented on the method, not worked around.
+
+## GraphQL surface
+
+Eleven `.graphql` files, all loaded by `graphql/types/index.ts`, each with a resolver class in
+`graphql/resolvers/`. **All are implemented** — no root field below throws `not implemented`.
+
+| File | Query fields | Mutation fields |
+|---|---|---|
+| `Auth.graphql` | `azureConnectionStatus` | `azureAuthUrl`, `azureDisconnect` |
+| `Mail.graphql` | `azureMailMessages`, `azureMailMessage`, `azureMailFolders`, `azureMailCategories`, `azureMailConversation`, `azureMailAttachments`, `azureMailAttachment` | `azureSetMailCategories`, `azureSendMail`, `azureReplyMail`, `azureReplyAllMail`, `azureForwardMail`, `azureCreateMailDraft`, `azureUpdateMailDraft`, `azureSendMailDraft`, `azureDeleteMailDraft` |
+| `Tasks.graphql` | `azureTodoLists`, `azureTodoTasks`, `azureTodoTask`, `azureTodoChecklistItems` | `azureCreateTodoList`, `azureUpdateTodoList`, `azureDeleteTodoList`, `azureCreateTodoTask`, `azureUpdateTodoTask`, `azureCompleteTodoTask`, `azureDeleteTodoTask`, `azureCreateTodoChecklistItem`, `azureUpdateTodoChecklistItem`, `azureDeleteTodoChecklistItem` |
+| `Calendar.graphql` | `azureCalendars`, `azureCalendarEvents`, `azureCalendarView`, `azureCalendarEvent`, `azureCalendarSchedule`, `azureFindMeetingTimes` | `azureCreateEvent`, `azureUpdateEvent`, `azureDeleteEvent`, `azureCancelEvent`, `azureRespondToEvent` |
+| `Drive.graphql` | `azureDrive`, `azureDrives`, `azureDriveItems`, `azureDriveItem`, `azureDriveSearch`, `azureDrivePermissions`, `azureDriveVersions` | `azureCreateDriveFolder`, `azureUploadDriveItem`, `azureMoveDriveItem`, `azureCopyDriveItem`, `azureDeleteDriveItem`, `azureRestoreDriveItem`, `azureShareDriveItem`, `azureInviteDriveCollaborators`, `azureDeleteDrivePermission`, `azureRestoreDriveVersion` |
+| `Documents.graphql` | `azureDocumentMetadata`, `azureDocumentText`, `azureDocumentPdf` | `azureCreateDocumentFromTemplate`, `azureReplaceDocument` |
+| `Workbook.graphql` | `azureWorkbookWorksheets`, `azureWorkbookRange`, `azureWorkbookTables` | `azureUpdateWorkbookRange`, `azureAppendWorkbookRows` |
+| `Contacts.graphql` | `azureContacts`, `azureContact`, `azureContactFolders`, `azureContactsInFolder`, `azurePeople`, `azureDirectoryUsers`, `azureContactPhoto` | `azureCreateContact`, `azureUpdateContact`, `azureDeleteContact` |
+| `Teams.graphql` | `azureChats`, `azureChatMessages`, `azureTeams`, `azureChannels`, `azureChannelMessages`, `azurePresence` | `azureSendChatMessage`, `azureSendChannelMessage` |
+| `SharePoint.graphql` | `azureSites`, `azureRootSite`, `azureSiteByPath`, `azureSharePointLists`, `azureSharePointItems`, `azureSharePointItem`, `azureSharePointColumns`, `azureSharePointDrive` | `azureCreateSharePointItem`, `azureUpdateSharePointItem`, `azureDeleteSharePointItem` |
+| `Sync.graphql` | `azureSyncState`, `azureSubscriptions` | `azureSync`, `azureRenewSubscriptions` |
+
+**`userId` is an optional argument on the Mail, Contacts and SharePoint fields** — 37 of the
+module's 104 root fields (16 in `Mail.graphql`, 10 in `Contacts.graphql`, 11 in
+`SharePoint.graphql`). It is
+**self-or-admin**: omitted, `null` or empty resolves to the caller; naming the caller resolves to
+the caller; naming **anyone else** throws `InsufficientPermissions` unless
+`context.hasRole('ADMIN') === true`. So an ADMIN can deliberately read another user's mailbox,
+contacts or SharePoint site through these fields — that is the designed behaviour, implemented
+identically in `MailResolver`, `ContactsResolver` and `SharePointResolver`, and stated in each
+`.graphql` file's header and each resolver's JSDoc. Any test or capability audit of cross-user
+access must exercise that ADMIN gate.
+
+Every other root field — `Auth`, `Calendar`, `Tasks`, `Drive`, `Documents`, `Workbook`, `Teams`
+and `Sync` — declares **no `userId` argument** and always acts as the caller. `TeamsResolver`
+returns `String(context.user._id)`; `Sync.graphql` says the same in its header comment.
+
+A `.graphql` file that is not listed in `graphql/types/index.ts` is never loaded, and
+the barrel is deliberately explicit (11 names, 11 files on disk).
 
 ### Drive (AZ-08)
 
@@ -349,7 +456,7 @@ Mounted at `/azure` (`index.ts` → `routes: { '/azure': routes }`):
 | GET | `/azure/auth/callback?code=&state=` | exchange the code, vault the tokens |
 | GET | `/azure/auth/status` | connection status for the caller |
 | POST | `/azure/auth/disconnect` | mark the vaulted token revoked |
-| POST | `/azure/webhooks/graph` | reserved for AZ-12 (empty router) |
+| POST | `/azure/webhooks/graph` | Graph change notifications: `?validationToken=` handshake, then `clientState`-verified notifications |
 | GET | `/azure/files/:itemId` | stream a file; sets `Content-Type` and `Content-Disposition`, never returns the pre-authenticated URL |
 | GET | `/azure/files/:itemId/thumbnail?size=small\|medium\|large` | stream a thumbnail rendition inline |
 
@@ -411,18 +518,39 @@ with jitter; **3 attempts total**; other `4xx` are never retried. Every failure 
 
 ## Legacy shim (retirement gate)
 
-`services/graph.ts` is a **deprecated** compatibility shim and must not be deleted. Three
-live importers in `reactory-core` (a different repository) depend on it:
-`resolvers/Emails/UserEmails.ts`, `resolvers/User/ProfileResolver.ts` and
-`services/EmailService.ts`. The nine method names and their success shapes are preserved;
-`sendEmail` and `getEmails` now **reject** instead of swallowing the error.
+`services/graph.ts` is a **deprecated** compatibility shim and must not be deleted. After AZ-19
+the only live importer left in `reactory-core` (a different repository) is
+`src/modules/reactory-core/resolvers/User/ProfileResolver.ts:6`:
+
+```ts
+import MSGraph from '@reactory/server-modules/reactory-azure/services/graph';
+```
+
+AZ-19 migrated the other two call sites away from the shim:
+
+- `resolvers/Emails/UserEmails.ts` now resolves
+  `context.getService('azure.AzureMailService@1.0.0')` (exposed as `AZURE_MAIL_SERVICE_ID`) and
+  declares local interfaces for the subset of the mail types it consumes — it imports nothing
+  from this module's `services/graph`.
+- `services/EmailService.ts` no longer imports the shim at all. (Its line 9 is
+  `import SendGrid from '@sendgrid/mail'` — SendGrid, not Microsoft Graph.)
+
+The nine method names and their success shapes are preserved; `sendEmail` and `getEmails` now
+**reject** instead of swallowing the error.
 
 `resolvers/User/ProfileResolver.ts` is a live **sign-in** path whose token comes from the
-User document. It cannot be migrated until the owner restarts the server, signs in through
-the Microsoft provider and confirms the migrated path works (plan §6.6). Only then may
-`services/graph.ts` and `types.d.ts` be deleted — **AZ-19** owns that change.
+User document. **The shim therefore must not be deleted yet**, even though it has only one
+importer left: that importer is on the sign-in path. It cannot be migrated until the owner
+restarts the server, signs in through the Microsoft provider and confirms the migrated path
+works (plan §6.6). Only then may `services/graph.ts` and `types.d.ts` be deleted — **AZ-19**
+owns that change.
 
 ## Environment variables
+
+Every variable below is read by this module's source, and these are the **only** environment
+variables it reads (verified by sweeping `process.env` across the module, including the
+`env: IAzureBlobStorageEnvironment = process.env` default parameter in
+`AzureBlobStorageService`). The operator checklist is `docs/operations.md`.
 
 | Variable | Required | Purpose |
 |---|---|---|
@@ -430,45 +558,73 @@ the Microsoft provider and confirms the migrated path works (plan §6.6). Only t
 | `AZURE_CLIENT_SECRET` | yes | client secret for the confidential client |
 | `AZURE_TENANT_ID` | yes | tenant id, or `organizations` for multi-tenant |
 | `AZURE_REDIRECT_URI` | yes | must match the registered redirect (`…/azure/auth/callback`) |
-| `AZURE_TOKEN_ENCRYPTION_KEY` | yes | master key for AES-256-GCM token encryption |
-| `AZURE_API_RATE_LIMIT` | no | per-user requests/minute budget; `0` disables the gate |
+| `AZURE_TOKEN_ENCRYPTION_KEY` | yes | master key for AES-256-GCM token and `clientState` encryption |
+| `AZURE_API_RATE_LIMIT` | no | per-user requests/minute budget; `0` or unset disables the gate |
+| `AZURE_AUTH_SUCCESS_REDIRECT` | no | post-callback redirect; defaults to `${REACTORY_APPLICATION_URL}/?azure=connected` |
+| `AZURE_AUTH_FAILURE_REDIRECT` | no | failure redirect; defaults to `${REACTORY_APPLICATION_URL}/?azure=error` |
+| `REACTORY_APPLICATION_URL` | recommended | base URL for the redirect defaults and for the webhook fallback |
+| `AZURE_WEBHOOK_NOTIFICATION_URL` | for subscriptions | public URL Graph calls; defaults to `${REACTORY_APPLICATION_URL}/azure/webhooks/graph` |
+| `AZURE_STORAGE_CONNECTION_STRING` | one of these | Blob Storage via connection string (preferred) |
+| `AZURE_STORAGE_ACCOUNT` | one of these | storage account name; with `AZURE_STORAGE_KEY`, or alone for `DefaultAzureCredential` |
+| `AZURE_STORAGE_ACCOUNT_URL` | no | explicit blob endpoint; account name is derived from it when not set |
+| `AZURE_STORAGE_KEY` | no | shared account key; enables SAS generation fallback |
 
-Optional, used by the HTTP routes: `AZURE_AUTH_SUCCESS_REDIRECT`,
-`AZURE_AUTH_FAILURE_REDIRECT`, `REACTORY_APPLICATION_URL`.
-`AZURE_STORAGE_CONNECTION_STRING` / `AZURE_STORAGE_ACCOUNT` / `AZURE_STORAGE_KEY` are
-introduced by AZ-16.
+There is **no `AZURE_WEBHOOK_DOMAIN` variable.** The public webhook address is configured with
+`AZURE_WEBHOOK_NOTIFICATION_URL` (explicit) or `REACTORY_APPLICATION_URL` (prefix). A name not
+listed above is not read by this module — adding one has no effect.
 
 Without a tenant, every failure path is typed: `AzureConfigurationMissing` rather than a
 half-built client.
 
-## Runtime dependencies — install BEFORE restarting the server
+## Runtime dependencies — verify BEFORE restarting the server
 
 The module needs these packages resolvable from `src/modules/reactory-azure`:
 
 ```
 @microsoft/microsoft-graph-client   # ^3.0.7   required by services/graph/AzureGraphClientProvider.ts
-@microsoft/microsoft-graph-types    # ^2.40.0  types only, same install
-@azure/msal-node                    # ^2.16.2  resolves today transitively - install it explicitly
+@microsoft/microsoft-graph-types    # ^2.40.0  types only (no runtime entry); same install
+@azure/msal-node                    # ^2.16.2  PKCE generation and token exchange
+@azure/storage-blob                 # 12.23.0  the Blob Storage data plane
+@azure/identity                     # ^3.4.2   DefaultAzureCredential fallback
+@azure/storage-file-share           # 12.23.0  declared dependency
 ```
 
-**They are not installed in this repository, and the host server does not supply
-`@microsoft/microsoft-graph-client`** (nothing in the module's or any ancestor `node_modules`
-has it). `googleapis` is hoisted into the server root for `reactory-google`; the Graph client
-is not. Verified from the natural mount:
+All runtime packages resolve from the host server root as of this pass. Verified from the
+natural mount:
 
 ```bash
 cd src/modules/reactory-azure && node -e "require.resolve('@microsoft/microsoft-graph-client')"
-# Error: Cannot find module '@microsoft/microsoft-graph-client'
+# /…/reactory-express-server/node_modules/@microsoft/microsoft-graph-client/lib/src/index.js
 ```
 
-**Why this blocks the restart, not just the tests.** `services/graph.ts` (the retained shim)
-imports `./graph/AzureGraphClientProvider`, which imports the SDK. `reactory-core` imports the
-shim eagerly (`index.ts` → `services/index` → `EmailService.ts:9`), and the generated
-`src/modules/__index.ts` imports `reactory-core` at start-up. After a merge, until the package
-is installed, **the server fails at core module load with `MODULE_NOT_FOUND`** — it does not
-boot at all; this is not "the Azure module is inert".
+(`@microsoft/microsoft-graph-types` is types-only and publishes no `main`; `require.resolve`
+failing for it is expected — `tsc` resolves its `types` field. `@azure/storage-file-share` is
+declared but not imported by this module's source.)
 
-Install it in one of the two locations that resolve from the module:
+Re-run that resolution check **before** a restart: see docs/operations.md §7.1.
+
+**Why a missing SDK blocks the restart, not just the tests.** `services/graph.ts` (the retained shim)
+imports `./graph/AzureGraphClientProvider` (line 52), which imports the SDK. The generated
+`src/modules/__index.ts:11` imports `reactory-core` at start-up, and the chain from there is
+eager — no lazy boundary anywhere in it:
+
+```
+src/modules/__index.ts:11
+  -> @reactory/server-modules/reactory-core/index
+     -> reactory-core/index.ts:2        import coreResolvers from './resolvers'
+        -> resolvers/index.ts:11        ProfileResolver,   (inside the './User' import block)
+           -> resolvers/User/ProfileResolver.ts:6
+              import MSGraph from '@reactory/server-modules/reactory-azure/services/graph'
+              -> services/graph.ts:52   import { createTokenGraphClient } from './graph/AzureGraphClientProvider'
+                 -> @microsoft/microsoft-graph-client
+```
+
+Re-verified against the installed trees. Until the package resolves, **the server fails at core
+module load with `MODULE_NOT_FOUND`** — it does not boot at all; this is not "the Azure module
+is inert".
+
+If it ever does not resolve, install it in one of the two locations that resolve from the module
+(this is a remedy, not a current step — the package resolves today):
 
 1. the module's own `node_modules` — `cd src/modules/reactory-azure && npm install`
    (uses this module's `dependencies`); or
@@ -481,9 +637,9 @@ harness but is **not** visible from the natural mount, so it does not satisfy th
 ## AI macros and the Azure Workspace Assistant (AZ-13)
 
 `ai/macros/index.ts` (owned by AZ-01) assembles `AZURE_MACROS` from one array per
-`ai/macros/<domain>.macros.ts` file. AZ-13 fills seven of those files; AZ-14 fills
+`ai/macros/<domain>.macros.ts` file. AZ-13 filled seven of those files; AZ-14 filled
 `teams.macros.ts`. **No domain ticket edits the barrel** - spreading the array is what
-makes the macro appear.
+makes the macro appear. The delivered surface is **ten macros** across eight files.
 
 | Macro | File | Service resolved via `context.getService` |
 |---|---|---|
@@ -496,8 +652,10 @@ makes the macro appear.
 | `azure_read_workbook` | `workbook.macros.ts` | `azure.AzureWorkbookService@1.0.0` |
 | `azure_list_contacts` | `contacts.macros.ts` | `azure.AzureContactsService@1.0.0` |
 | `azure_create_task` | `tasks.macros.ts` | `azure.AzureTodoService@1.0.0` |
+| `azure_send_teams_message` | `teams.macros.ts` | `azure.AzureTeamsService@1.0.0` |
 
-`azure_send_teams_message` is AZ-14's, in `teams.macros.ts`.
+Ten macros in total: nine from AZ-13 plus the AZ-14 Teams macro. `AZURE_TOOLS` is empty — the
+tools live on each macro definition.
 
 **Contract.** Each entry is a `MacroComponentDefinition` whose single `tools` entry is the
 `MacroToolDefinition` the model calls. Every parameter carries a `description` and a
@@ -514,42 +672,59 @@ service registration returns the same shape. No macro is allowed to throw.
 
 **Persona.** `ai/persona/AzureWorkspaceAssistant/agent.yaml` (id
 `AzureWorkspaceAssistant`, name "Azure Workspace Assistant", namespace `azure`) lists
-exactly the nine macro names in `tools.includes` and `macros.includes` - a persona is
-offered only tools this module registers.
+exactly the **nine AZ-13 macros** in both `tools.includes` and `macros.includes`:
+`azure_connection_status`, `azure_send_email`, `azure_search_email`, `azure_create_event`,
+`azure_list_events`, `azure_search_drive`, `azure_read_workbook`, `azure_list_contacts`,
+`azure_create_task`.
 
-**Test rule.** `__tests__/macros.test.ts` asserts each of the nine names is *present* in
-`AZURE_MACROS` (a subset assertion) and never asserts a whole-array length: AZ-14 adds its
-teams macro to the same array independently, so a length is only correct on one merge
-order. The only place a ten-entry count belongs is the plan's definition of done.
+**`azure_send_teams_message` is registered but not offered to the assistant.** The Teams macro
+is in `AZURE_MACROS` (`ai/macros/index.ts` spreads `TEAMS_MACROS`, so the array holds ten), but
+it is **absent from the persona's `tools.includes` and `macros.includes`** — so the assistant
+cannot send Teams messages today, even though the capability is registered and reachable through
+GraphQL and the service. This is not a defect in `agent.yaml` being papered over: AZ-13's
+acceptance criterion requires only that the persona's tool list is a *subset* of the registered
+macros, which nine satisfies, and `__tests__/macros.test.ts` asserts that subset. Whether the
+persona **should** offer the Teams tool is an AZ-14/owner decision; the persona file is not
+changed here (documentation-only ticket).
+
+**Test rule.** `__tests__/macros.test.ts` asserts each of the nine AZ-13 names is *present* in
+`AZURE_MACROS` (a subset assertion) and never asserts a whole-array length: AZ-14 added its
+teams macro to the same array independently, so a length is only correct on one merge order.
+A ten-entry count is a statement about `AZURE_MACROS`, not about what the persona is offered —
+those are two different numbers (ten registered, nine offered). The plan's definition of done is
+the only place the ten-entry registry count belongs.
 
 ## Tests
 
-Run from the module worktree. This repository has **no jest config of its own** — the host
-server supplies the configuration, the transformer and Jest. It supplies `node_modules` only
-for packages the server already has, which is why the three packages above must be installed
-locally first:
+Run the host's worktree harness against this checkout. This repository has **no jest config of
+its own** — the host server supplies the configuration, the transformer and Jest. The
+`--module-root` flag is what makes the run exercise *this* tree rather than
+`src/modules/reactory-azure`:
 
 ```bash
 node /Users/wernerw/Projects/reactory/reactory-express-server/src/modules/reactory-reactor/scripts/ai/run-worktree-tests.js \
-  --module-root <worktree> __tests__
+  --module-root <worktree> __tests__/contract-shape.test.ts
 ```
 
-Exit `0` means every suite loaded and every test passed. Do **not** add a jest config and
-do **not** run a bare `npx jest`.
+Use `__tests__` instead of a single path for the whole suite (33 files, 1284 tests). Exit `0` means every
+suite loaded and every test passed. Do **not** add a jest config and do **not** run a bare
+`npx jest`.
 
-Coverage (measured with the same harness; the server's global thresholds do not apply to a
-single-module run, so pass an empty threshold set):
+**Known pre-existing failure — one test, not caused by AZ-18.** `__tests__/contract-shape.test.ts:173`
+still asserts `expect(forms).toEqual([])`, the AZ-01-era state of the barrel. AZ-17 delivered nine
+forms, so the assertion is false about the module and the suite exits `1` with
+`1283 passed, 1 failed` of 1284. Everything else passes, including the same file's assertion that
+`AGENT.md` documents every exported FQN. The fix is `expect(forms).toHaveLength(9)` plus renaming
+the test; it is tracked as **REACTORY-302016408/20261108/4179753370** and was deliberately left
+outside AZ-18's documentation-only scope. Do not treat this failure as a regression.
+
+Coverage over the same harness (the server's global thresholds do not apply to a single-module
+run, so pass an empty threshold set):
 
 ```bash
 node …/run-worktree-tests.js --module-root <worktree> __tests__ \
   --coverage --coverageReporters=text --coverageThreshold='{}'
 ```
-
-Current line/branch figures for the implemented files: `AzureAuthService` 99.11/85.80,
-`AzureService` 100/85.71, `AzureAuditService` 100/85.29, `services/graph.ts` 97.05/90.62,
-`AzureGraphClientProvider` 96.07/88.88, `routes/auth.ts` 100/82.60, `AzureDriveService`
-100/84.61, `routes/proxy.ts` 97.50/86.53, `DriveResolver` 100/100 (measured over the two drive
-suites; the 80% branch floor applies per file, not per module).
 
 `DriveResolver` declares its own `DriveResolverContext` interface instead of annotating
 `Reactory.Server.IReactoryContext`. That is not cosmetic: `emitDecoratorMetadata` rewrites the
@@ -571,7 +746,7 @@ interface emits `Object`, and no decorator here reads `design:paramtypes`.
 | `__tests__/drive-service.test.ts` (84) | `downloadItem` two-hop redirect with no `Authorization` on the storage host, 404 `itemNotFound` → `ApiError`, copy monitor (completed/inProgress/302/failure/drain), upload-session 202 and unreadable-body fallbacks, every `toNodeStream` body shape, error-body parsing and its 1 MiB cap, item scrubbing (including a null thumbnail set), `/azure/files` proxy headers, 401/404/500/502/503, stream error before/after headers, client disconnect, all resolver mutations and identity unwrapping |
 | `__tests__/macros.test.ts` (107) | the nine AZ-13 macros are present in `AZURE_MACROS` (subset assertions, no array length), no other macro file declares the Teams macro, every parameter has a description and its required flag lands in `schema.required`, each macro resolves its service from a fake context and imports no service singleton, a `NotConnected` rejection becomes a `connected: false` payload instead of a throw, and `AzureWorkspaceAssistant/agent.yaml` parses with a tool list that is a subset of the registered macro names |
 | `__tests__/drive.request-shape.test.ts` (40) | segment/query encoding (`a b#c?.txt`, search quoting), item/parent/drive paths, write bodies, simple upload at 4 MiB, resumable fragments at 320 KiB multiples with no bearer token, 416 resume, thumbnail path, and the **production `fetch` transport** (`redirect: 'manual'`, header normalisation, typed no-fetch failure) |
-| `__tests__/forms.test.ts` (20) | the nine forms and their names; ids unique, `azure`-namespaced and normalised; `schema.type === 'object'` with a non-empty `properties`; `required` ⊆ declared properties; every `uiSchema` key ⊆ declared properties; per-form document counts; every GraphQL document validated with `graphql-js` against `graphql/types/*.graphql` with `name` == the root field in the matching operation; no `graphql.queries` block; every `variables` source rooted at formData/formContext/query and naming a declared property; every declared variable produced by the map and nothing else; no whole-`formData` forwarding in either orientation; every map executed with **both** object-mapper builds (5.x and 6.x) and the variables validated against the GraphQL types; **every declared source -> target pair present and non-null under both builds**; **every read payload tied to a declared property or a documented list-payload exception**; every `resultMap` key (dotted paths included) on the return type with every target a declared property; a resultMap run over a full sample; the workbook matrix characterisation; every label an `azure.forms.*` key that resolves (grid column titles included); enum members fully labelled; no orphaned i18n key |
+| `__tests__/forms.test.ts` (20) | the nine forms and their names; ids unique, `azure`-namespaced and normalised; `schema.type === 'object'` with a non-empty `properties`; `required` ⊆ declared properties; every `uiSchema` key ⊆ declared properties; per-form document counts; every GraphQL document validated with `graphql-js` against `graphql/types/*.graphql` with `name` == the root field in the matching operation; every `graphql.queries` entry is named by some widget's `ui:options.query`, and every `ui:options.query` names an existing entry (both directions, so neither a dead entry nor a dangling reference can pass); every `variables` source rooted at formData/formContext/query and naming a declared property; every declared variable produced by the map and nothing else; no whole-`formData` forwarding in either orientation; every map executed with **both** object-mapper builds (5.x and 6.x) and the variables validated against the GraphQL types; **every declared source -> target pair present and non-null under both builds**; **every read payload tied to a declared property or a documented list-payload exception**; every `resultMap` key (dotted paths included) on the return type with every target a declared property; a resultMap run over a full sample; the workbook matrix characterisation; every label an `azure.forms.*` key that resolves (grid column titles included); enum members fully labelled; no orphaned i18n key |
 
 All tests mock the Graph layer: **no live Graph call is made** in this repository. The drive
 suites replace the byte transport via `setDriveHttpClient` and mock the SDK, so the redirect and
