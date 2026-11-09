@@ -40,8 +40,8 @@
   "dependencies": {
     "@azure/identity": "^3.4.2",
     "@azure/msal-node": "^2.16.2",
-    "@azure/storage-blob": "12.23.0",
-    "@azure/storage-file-share": "12.23.0",
+    "@azure/storage-blob": "12.34.0",
+    "@azure/storage-file-share": "12.33.0",
     "@microsoft/microsoft-graph-client": "^3.0.7",
     "@microsoft/microsoft-graph-types": "^2.40.0"
   }
